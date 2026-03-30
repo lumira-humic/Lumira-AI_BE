@@ -1,18 +1,53 @@
-import { IsEmail, IsString, IsNotEmpty } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { 
+  IsEmail, 
+  IsString, 
+  IsNotEmpty, 
+  MaxLength, 
+  MinLength, 
+  IsEnum, 
+  IsOptional 
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { UserRole } from '../enums/user-role.enum';
+import { UserStatus } from '../enums/user-status.enum';
 
+/**
+ * DTO for creating a new user.
+ * 
+ * Used by Admin to create new doctor accounts.
+ */
 export class CreateUserDto {
-  @ApiProperty({ example: 'user@example.com' })
+  /** Full name of the user. */
+  @ApiProperty({ example: 'Dr. Budi Santoso' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  name: string;
+
+  /** Unique email address. */
+  @ApiProperty({ example: 'budi.santoso@lumira.ai' })
   @IsEmail()
+  @IsNotEmpty()
+  @Transform(({ value }) => value?.toLowerCase())
   email: string;
 
-  @ApiProperty({ example: 'John' })
+  /** Hashed password (will be hashed in service). */
+  @ApiProperty({ example: 'StrongPass123!' })
   @IsString()
   @IsNotEmpty()
-  firstName: string;
+  @MinLength(8)
+  password: string;
 
-  @ApiProperty({ example: 'Doe' })
-  @IsString()
-  @IsNotEmpty()
-  lastName: string;
+  /** User role (ADMIN or DOCTOR). */
+  @ApiPropertyOptional({ enum: UserRole, default: UserRole.DOCTOR })
+  @IsEnum(UserRole)
+  @IsOptional()
+  role?: UserRole = UserRole.DOCTOR;
+
+  /** Account status. */
+  @ApiPropertyOptional({ enum: UserStatus, default: UserStatus.ACTIVE })
+  @IsEnum(UserStatus)
+  @IsOptional()
+  status?: UserStatus = UserStatus.ACTIVE;
 }
