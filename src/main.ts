@@ -2,11 +2,13 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import compression from 'compression';
 import helmet from 'helmet';
 
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter, TransformInterceptor } from './common';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+const compression = require('compression') as typeof import('compression');
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
