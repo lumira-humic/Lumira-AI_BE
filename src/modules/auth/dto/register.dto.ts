@@ -1,12 +1,6 @@
-import {
-  IsEmail,
-  IsString,
-  IsNotEmpty,
-  IsOptional,
-  MinLength,
-} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 /**
  * DTO for patient self-registration from the mobile app.
@@ -28,7 +22,7 @@ export class RegisterDto {
     description: 'Email address (will be lowercased)',
   })
   @IsEmail()
-  @Transform(({ value }) => (value as string).toLowerCase().trim())
+  @Transform(({ value }: { value: string }) => value.toLowerCase().trim())
   email: string;
 
   @ApiProperty({

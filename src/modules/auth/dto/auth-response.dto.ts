@@ -28,10 +28,7 @@ export class AuthResponseDto {
 
   @ApiProperty({
     description: 'Profile data of the authenticated actor',
-    oneOf: [
-      { $ref: getSchemaPath(UserResponseDto) },
-      { $ref: getSchemaPath(PatientResponseDto) },
-    ],
+    oneOf: [{ $ref: getSchemaPath(UserResponseDto) }, { $ref: getSchemaPath(PatientResponseDto) }],
   })
   user: UserResponseDto | PatientResponseDto;
 }

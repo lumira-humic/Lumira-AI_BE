@@ -1,26 +1,25 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { Cache } from 'cache-manager';
 import * as jwt from 'jsonwebtoken';
 
-import { AppException } from '../../common/exceptions/base.exception';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import { AppException } from '../../common/exceptions/base.exception';
 
-import { UsersRepository } from '../users/users.repository';
-import { PatientsRepository } from '../patients/patients.repository';
-import { User } from '../users/entities/user.entity';
-import { Patient } from '../patients/entities/patient.entity';
-import { UserResponseDto } from '../users/dto/user-response.dto';
 import { PatientResponseDto } from '../patients/dto/patient-response.dto';
-import { UserRole } from '../users/enums/user-role.enum';
+import { Patient } from '../patients/entities/patient.entity';
+import { PatientsRepository } from '../patients/patients.repository';
+import { UserResponseDto } from '../users/dto/user-response.dto';
+import { User } from '../users/entities/user.entity';
+import { UsersRepository } from '../users/users.repository';
 
-import { RegisterDto } from './dto/register.dto';
+import { AccessTokenResponseDto, AuthResponseDto } from './dto/auth-response.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { AuthResponseDto, AccessTokenResponseDto } from './dto/auth-response.dto';
+import { RegisterDto } from './dto/register.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 
 /** Refresh-token TTL in seconds (7 days). */
@@ -66,11 +65,7 @@ export class AuthService {
     });
 
     if (existingPatient) {
-      throw new AppException(
-        ErrorCode.USER_ALREADY_EXISTS,
-        'Email is already registered',
-        409,
-      );
+      throw new AppException(ErrorCode.USER_ALREADY_EXISTS, 'Email is already registered', 409);
     }
 
     // Also check users table to prevent cross-table email conflicts
@@ -79,11 +74,7 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new AppException(
-        ErrorCode.USER_ALREADY_EXISTS,
-        'Email is already registered',
-        409,
-      );
+      throw new AppException(ErrorCode.USER_ALREADY_EXISTS, 'Email is already registered', 409);
     }
 
     // Hash password and create patient
@@ -132,12 +123,8 @@ export class AuthService {
    * @param actorType - Discriminator (`'user'` or `'patient'`).
    * @returns Auth response with tokens and profile.
    */
-  async login(
-    actor: User | Patient,
-    actorType: 'user' | 'patient',
-  ): Promise<AuthResponseDto> {
-    const role =
-      actorType === 'user' ? (actor as User).role : 'patient';
+  async login(actor: User | Patient, actorType: 'user' | 'patient'): Promise<AuthResponseDto> {
+    const role = actorType === 'user' ? (actor as User).role : 'patient';
 
     const payload: JwtPayload = {
       sub: actor.id,
@@ -223,10 +210,7 @@ export class AuthService {
         throw new AppException(ErrorCode.NOT_FOUND, 'User not found', 404);
       }
 
-      const isMatch = await this.comparePassword(
-        dto.currentPassword,
-        user.password,
-      );
+      const isMatch = await this.comparePassword(dto.currentPassword, user.password);
       if (!isMatch) {
         throw new AppException(
           ErrorCode.AUTH_INVALID_CREDENTIALS,
@@ -248,10 +232,7 @@ export class AuthService {
         throw new AppException(ErrorCode.NOT_FOUND, 'Patient not found', 404);
       }
 
-      const isMatch = await this.comparePassword(
-        dto.currentPassword,
-        patient.password,
-      );
+      const isMatch = await this.comparePassword(dto.currentPassword, patient.password);
       if (!isMatch) {
         throw new AppException(
           ErrorCode.AUTH_INVALID_CREDENTIALS,
@@ -278,11 +259,12 @@ export class AuthService {
    * @throws AppException if the refresh token is invalid or expired.
    */
   async refreshToken(dto: RefreshTokenDto): Promise<AccessTokenResponseDto> {
-    const refreshSecret = this.configService.get<string>('jwt.refreshSecret');
+    const refreshSecret = this.configService.get<string>('jwt.refreshSecret') as string;
 
     let decoded: JwtPayload;
     try {
-      decoded = jwt.verify(dto.refreshToken, refreshSecret!) as JwtPayload;
+      const verifyResult = jwt.verify(dto.refreshToken, refreshSecret);
+      decoded = verifyResult as unknown as JwtPayload;
     } catch {
       throw new AppException(
         ErrorCode.AUTH_REFRESH_TOKEN_INVALID,
@@ -314,9 +296,7 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(accessPayload);
 
-    this.logger.log(
-      `Token refreshed for ${decoded.actorType}:${decoded.sub}`,
-    );
+    this.logger.log(`Token refreshed for ${decoded.actorType}:${decoded.sub}`);
 
     return { accessToken };
   }
@@ -329,19 +309,12 @@ export class AuthService {
    * @param actorType - Discriminator.
    * @throws AppException if there is no active session to invalidate.
    */
-  async logout(
-    userId: string,
-    actorType: 'user' | 'patient',
-  ): Promise<void> {
+  async logout(userId: string, actorType: 'user' | 'patient'): Promise<void> {
     const key = `refresh:${actorType}:${userId}`;
     const storedToken = await this.cacheManager.get<string>(key);
 
     if (!storedToken) {
-      throw new AppException(
-        ErrorCode.AUTH_TOKEN_INVALID,
-        'Already logged out',
-        400,
-      );
+      throw new AppException(ErrorCode.AUTH_TOKEN_INVALID, 'Already logged out', 400);
     }
 
     await this.cacheManager.del(key);
@@ -402,10 +375,7 @@ export class AuthService {
    * @param hashed - Stored bcrypt hash.
    * @returns `true` if they match.
    */
-  private async comparePassword(
-    plain: string,
-    hashed: string,
-  ): Promise<boolean> {
+  private async comparePassword(plain: string, hashed: string): Promise<boolean> {
     return bcrypt.compare(plain, hashed);
   }
 

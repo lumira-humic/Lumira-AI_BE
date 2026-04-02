@@ -1,11 +1,11 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { Test, TestingModule } from '@nestjs/testing';
 
-import { AuthService } from './auth.service';
-import { UsersRepository } from '../users/users.repository';
 import { PatientsRepository } from '../patients/patients.repository';
+import { UsersRepository } from '../users/users.repository';
+import { AuthService } from './auth.service';
 
 /**
  * Unit test suite for AuthService.
@@ -15,9 +15,23 @@ import { PatientsRepository } from '../patients/patients.repository';
  */
 describe('AuthService', () => {
   let service: AuthService;
-  let usersRepository: jest.Mocked<Partial<UsersRepository>>;
-  let patientsRepository: jest.Mocked<Partial<PatientsRepository>>;
-  let jwtService: jest.Mocked<Partial<JwtService>>;
+  let usersRepository: {
+    findOne: jest.Mock;
+    save: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
+  let patientsRepository: {
+    findOne: jest.Mock;
+    save: jest.Mock;
+    create: jest.Mock;
+    createPatient: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
+  let jwtService: {
+    sign: jest.Mock;
+    signAsync: jest.Mock;
+    verify: jest.Mock;
+  };
   let cacheManager: Record<string, jest.Mock>;
 
   beforeEach(async () => {
@@ -96,9 +110,9 @@ describe('AuthService', () => {
         password: 'password123',
       };
 
-      patientsRepository.findOne!.mockResolvedValue(null);
-      usersRepository.findOne!.mockResolvedValue(null);
-      patientsRepository.createPatient!.mockResolvedValue({
+      patientsRepository.findOne.mockResolvedValue(null);
+      usersRepository.findOne.mockResolvedValue(null);
+      patientsRepository.createPatient.mockResolvedValue({
         id: 'uuid-patient-1',
         name: dto.name,
         email: dto.email,
@@ -126,14 +140,12 @@ describe('AuthService', () => {
         password: 'password123',
       };
 
-      patientsRepository.findOne!.mockResolvedValue({
+      patientsRepository.findOne.mockResolvedValue({
         id: 'uuid-existing',
         email: dto.email,
       } as never);
 
-      await expect(service.register(dto)).rejects.toThrow(
-        'Email is already registered',
-      );
+      await expect(service.register(dto)).rejects.toThrow('Email is already registered');
     });
   });
 
@@ -182,7 +194,7 @@ describe('AuthService', () => {
 
   describe('getProfile', () => {
     it('should return user profile DTO', async () => {
-      usersRepository.findOne!.mockResolvedValue({
+      usersRepository.findOne.mockResolvedValue({
         id: 'uuid-user-1',
         name: 'Dr. Test',
         email: 'doctor@lumira.ai',
@@ -200,7 +212,7 @@ describe('AuthService', () => {
     });
 
     it('should return patient profile DTO', async () => {
-      patientsRepository.findOne!.mockResolvedValue({
+      patientsRepository.findOne.mockResolvedValue({
         id: 'uuid-patient-1',
         name: 'Patient Test',
         email: 'patient@mail.com',
@@ -221,13 +233,13 @@ describe('AuthService', () => {
   // ────────────────────────── changePassword ──────────────────────────
 
   describe('changePassword', () => {
-    it('should change password when current password matches', async () => {
+    it('should change password when current password matches', () => {
       // This is a stub — bcrypt.compare would need to be mocked
       // for a full integration. The structure is ready to be expanded.
       expect(true).toBe(true);
     });
 
-    it('should throw 400 when current password is wrong', async () => {
+    it('should throw 400 when current password is wrong', () => {
       // Stub: expand with bcrypt mock for full coverage.
       expect(true).toBe(true);
     });
@@ -236,17 +248,17 @@ describe('AuthService', () => {
   // ────────────────────────── refreshToken ──────────────────────────
 
   describe('refreshToken', () => {
-    it('should return a new access token for a valid refresh token', async () => {
+    it('should return a new access token for a valid refresh token', () => {
       // Stub: requires mocking jsonwebtoken.verify and cache.get.
       expect(true).toBe(true);
     });
 
-    it('should throw 401 for an expired refresh token', async () => {
+    it('should throw 401 for an expired refresh token', () => {
       // Stub: mock jsonwebtoken.verify to throw TokenExpiredError.
       expect(true).toBe(true);
     });
 
-    it('should throw 401 when refresh token is not in Redis', async () => {
+    it('should throw 401 when refresh token is not in Redis', () => {
       // Stub: mock cache.get to return null.
       expect(true).toBe(true);
     });
@@ -266,9 +278,7 @@ describe('AuthService', () => {
     it('should throw 400 if already logged out', async () => {
       cacheManager.get.mockResolvedValue(null);
 
-      await expect(service.logout('uuid-user-1', 'user')).rejects.toThrow(
-        'Already logged out',
-      );
+      await expect(service.logout('uuid-user-1', 'user')).rejects.toThrow('Already logged out');
     });
   });
 });

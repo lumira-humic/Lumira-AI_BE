@@ -1,15 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_GUARD } from '@nestjs/core';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { validationSchema } from './config/validation.schema';
 import * as configs from './config';
+import { validationSchema } from './config/validation.schema';
 
-import { UsersModule } from './modules/users/users.module';
-import { PatientsModule } from './modules/patients/patients.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { PatientsModule } from './modules/patients/patients.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -20,12 +20,13 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
       validationSchema,
       envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
     }),
-    
+
     // TypeORM Configuration
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => configService.get('database')!,
+      useFactory: (configService: ConfigService) =>
+        configService.get('database') as Record<string, unknown>,
     }),
 
     // Feature Modules

@@ -5,7 +5,7 @@ import { User } from '../entities/user.entity';
 
 /**
  * Response DTO for user profile data.
- * 
+ *
  * Excludes sensitive fields like password.
  */
 export class UserResponseDto {
@@ -39,7 +39,7 @@ export class UserResponseDto {
 
   /**
    * Map a User entity to a UserResponseDto.
-   * 
+   *
    * @param entity - User database entity.
    * @returns Mapped DTO.
    */
@@ -57,7 +57,7 @@ export class UserResponseDto {
 
   /**
    * Map an array of User entities to an array of UserResponseDtos.
-   * 
+   *
    * @param entities - Array of User entities.
    * @returns Array of mapped DTOs.
    */

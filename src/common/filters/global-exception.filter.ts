@@ -1,14 +1,14 @@
 import {
-  ExceptionFilter,
-  Catch,
   ArgumentsHost,
+  Catch,
+  ExceptionFilter,
   HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { AppException } from '../exceptions/base.exception';
 import { ErrorCode } from '../enums/error-code.enum';
+import { AppException } from '../exceptions/base.exception';
 import { ResponseHelper } from '../helpers/response.helper';
 
 @Catch()
@@ -32,22 +32,24 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       errorCode = exception.errorCode;
     } else if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
-      const exceptionResponse: any = exception.getResponse();
-      
+      const exceptionResponse = exception.getResponse() as string | Record<string, unknown>;
+
+      const responseMessage =
+        typeof exceptionResponse === 'string'
+          ? undefined
+          : (exceptionResponse.message as string | string[] | undefined);
+
       message =
         typeof exceptionResponse === 'string'
           ? exceptionResponse
-          : exceptionResponse.message || exception.message;
+          : (typeof responseMessage === 'string' ? responseMessage : null) || exception.message;
 
       // Handle class-validator ValidationException which outputs array of strings for messages
-      if (
-        statusCode === HttpStatus.BAD_REQUEST &&
-        Array.isArray(exceptionResponse.message)
-      ) {
+      if (statusCode === HttpStatus.BAD_REQUEST && Array.isArray(responseMessage)) {
         statusCode = HttpStatus.UNPROCESSABLE_ENTITY; // 422
         errorCode = ErrorCode.VALIDATION_ERROR;
         message = 'Validation failed';
-        fieldErrors = exceptionResponse.message.map((msg: string) => {
+        fieldErrors = responseMessage.map((msg: string) => {
           // Extract the exact field name based on class-validator's default message structure.
           // e.g. "email must be an email" -> field: "email"
           const fieldName = msg.split(' ')[0];
@@ -71,10 +73,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       message = exception.message;
     }
 
-    if (
-      process.env.NODE_ENV !== 'production' &&
-      exception instanceof Error
-    ) {
+    if (process.env.NODE_ENV !== 'production' && exception instanceof Error) {
       stack = exception.stack;
     }
 
@@ -84,13 +83,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       exception instanceof Error ? exception.stack : '',
     );
 
-    const errorResponse = ResponseHelper.error(
-      message,
-      statusCode,
-      errorCode,
-      fieldErrors,
-      stack,
-    );
+    const errorResponse = ResponseHelper.error(message, statusCode, errorCode, fieldErrors, stack);
 
     response.status(statusCode).json(errorResponse);
   }

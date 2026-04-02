@@ -1,16 +1,15 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { HttpStatus } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+import { Test, TestingModule } from '@nestjs/testing';
 
-import { UsersService } from './users.service';
-import { UsersRepository } from './users.repository';
-import { CreateUserDto, UpdateUserDto, QueryUserDto, UserResponseDto } from './dto';
-import { AppException } from '../../common/exceptions/base.exception';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import { AppException } from '../../common/exceptions/base.exception';
+import { CreateUserDto, QueryUserDto, UpdateUserDto, UserResponseDto } from './dto';
 import { User } from './entities/user.entity';
 import { UserRole } from './enums/user-role.enum';
 import { UserStatus } from './enums/user-status.enum';
+import { UsersRepository } from './users.repository';
+import { UsersService } from './users.service';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -96,7 +95,11 @@ describe('UsersService', () => {
       repository.findByEmail.mockResolvedValue(mockUser);
 
       await expect(service.create(createDto)).rejects.toThrow(
-        new AppException(ErrorCode.USER_ALREADY_EXISTS, 'Email already registered', HttpStatus.CONFLICT),
+        new AppException(
+          ErrorCode.USER_ALREADY_EXISTS,
+          'Email already registered',
+          HttpStatus.CONFLICT,
+        ),
       );
     });
   });

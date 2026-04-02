@@ -1,19 +1,5 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  UseGuards,
-  HttpStatus,
-  HttpCode,
-} from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiBody,
-} from '@nestjs/swagger';
+import { Controller, Post, Get, Body, UseGuards, HttpStatus, HttpCode } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 
 import { ResponseHelper } from '../../common/helpers/response.helper';
 import { ApiResponse as ApiResponseType } from '../../common/interfaces/api-response.interface';
@@ -66,9 +52,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   @ApiResponse({ status: 422, description: 'Validation error' })
-  async register(
-    @Body() dto: RegisterDto,
-  ): Promise<ApiResponseType<AuthResponseDto>> {
+  async register(@Body() dto: RegisterDto): Promise<ApiResponseType<AuthResponseDto>> {
     const result = await this.authService.register(dto);
     return ResponseHelper.success(result, 'Registration successful', HttpStatus.CREATED);
   }
@@ -117,10 +101,7 @@ export class AuthController {
   async getProfile(
     @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
   ): Promise<ApiResponseType<UserResponseDto | PatientResponseDto>> {
-    const profile = await this.authService.getProfile(
-      actor.id,
-      actor.actorType,
-    );
+    const profile = await this.authService.getProfile(actor.id, actor.actorType);
     return ResponseHelper.success(profile, 'Profile fetched successfully');
   }
 

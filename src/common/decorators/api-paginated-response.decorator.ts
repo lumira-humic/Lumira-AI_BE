@@ -1,9 +1,9 @@
-import { applyDecorators, Type, HttpStatus } from '@nestjs/common';
+import { applyDecorators, HttpStatus, Type } from '@nestjs/common';
 import { ApiExtraModels, ApiResponse, getSchemaPath } from '@nestjs/swagger';
-import { ApiResponseDto } from '../dto/api-response.dto';
 import { ApiMetaDto } from '../dto/api-meta.dto';
+import { ApiResponseDto } from '../dto/api-response.dto';
 
-export const ApiPaginatedResponse = <Model extends Type<any>>(model: Model) => {
+export const ApiPaginatedResponse = <Model extends Type<unknown>>(model: Model) => {
   return applyDecorators(
     ApiExtraModels(ApiResponseDto, ApiMetaDto, model),
     ApiResponse({

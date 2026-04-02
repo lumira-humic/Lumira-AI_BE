@@ -1,12 +1,12 @@
-import { Injectable, Inject, Logger, HttpStatus } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { Cache } from 'cache-manager';
 
-import { UsersRepository } from './users.repository';
-import { CreateUserDto, UpdateUserDto, QueryUserDto, UserResponseDto } from './dto';
-import { AppException } from '../../common/exceptions/base.exception';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import { AppException } from '../../common/exceptions/base.exception';
+import { CreateUserDto, QueryUserDto, UpdateUserDto, UserResponseDto } from './dto';
+import { UsersRepository } from './users.repository';
 
 /** bcrypt salt rounds used for password hashing. */
 const BCRYPT_ROUNDS = 12;
@@ -16,7 +16,7 @@ const LIST_CACHE_TTL = 60;
 
 /**
  * Service for managing system users (Admin & Doctors).
- * 
+ *
  * Provides CRUD operations with Redis caching and password hashing.
  */
 @Injectable()
@@ -30,7 +30,7 @@ export class UsersService {
 
   /**
    * Create a new user account.
-   * 
+   *
    * @param dto - User details.
    * @returns Mapped response DTO.
    * @throws AppException if email is already registered.
@@ -46,14 +46,14 @@ export class UsersService {
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-    
+
     const newUser = this.usersRepository.create({
       ...dto,
       password: hashedPassword,
     });
 
     const savedUser = await this.usersRepository.save(newUser);
-    
+
     // Invalidate list cache
     await this.invalidateListCache();
 
@@ -64,9 +64,9 @@ export class UsersService {
 
   /**
    * Get paginated list of users with filters.
-   * 
+   *
    * Uses Redis to cache query results for 60 seconds.
-   * 
+   *
    * @param query - Pagination and filter parameters.
    * @returns Tuple of [mapped DTOs, total count].
    */
@@ -79,10 +79,7 @@ export class UsersService {
     }
 
     const [users, total] = await this.usersRepository.findAllWithFilter(query);
-    const result: [UserResponseDto[], number] = [
-      UserResponseDto.fromEntities(users),
-      total,
-    ];
+    const result: [UserResponseDto[], number] = [UserResponseDto.fromEntities(users), total];
 
     // Store in Redis with 60s TTL (TTL in milliseconds for some cache-manager versions)
     await this.cacheManager.set(cacheKey, result, LIST_CACHE_TTL * 1000);
@@ -92,7 +89,7 @@ export class UsersService {
 
   /**
    * Find a single user by ID.
-   * 
+   *
    * @param id - User UUID.
    * @returns Mapped response DTO.
    * @throws AppException if user not found.
@@ -100,11 +97,7 @@ export class UsersService {
   async findById(id: string): Promise<UserResponseDto> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) {
-      throw new AppException(
-        ErrorCode.USER_NOT_FOUND,
-        'User not found',
-        HttpStatus.NOT_FOUND,
-      );
+      throw new AppException(ErrorCode.USER_NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND);
     }
 
     return UserResponseDto.fromEntity(user);
@@ -112,7 +105,7 @@ export class UsersService {
 
   /**
    * Update an existing user account.
-   * 
+   *
    * @param id - User UUID.
    * @param dto - Updated fields.
    * @returns Mapped response DTO.
@@ -121,11 +114,7 @@ export class UsersService {
   async update(id: string, dto: UpdateUserDto): Promise<UserResponseDto> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) {
-      throw new AppException(
-        ErrorCode.USER_NOT_FOUND,
-        'User not found',
-        HttpStatus.NOT_FOUND,
-      );
+      throw new AppException(ErrorCode.USER_NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND);
     }
 
     // Check email duplication if email is changing
@@ -153,18 +142,14 @@ export class UsersService {
 
   /**
    * Soft-delete a user account.
-   * 
+   *
    * @param id - User UUID.
    * @throws AppException if user not found.
    */
   async delete(id: string): Promise<void> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) {
-      throw new AppException(
-        ErrorCode.USER_NOT_FOUND,
-        'User not found',
-        HttpStatus.NOT_FOUND,
-      );
+      throw new AppException(ErrorCode.USER_NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND);
     }
 
     await this.usersRepository.softDelete(id);
@@ -183,7 +168,9 @@ export class UsersService {
   private async invalidateListCache(): Promise<void> {
     // Note: Better implementation would use cache-manager's scan/del if available,
     // but for simple Redis store, we can rely on pattern matching or clearing keys.
-    const store = (this.cacheManager as any).store;
+    const store = (
+      this.cacheManager as unknown as { store?: { keys?: (pattern: string) => Promise<string[]> } }
+    ).store;
     if (store && typeof store.keys === 'function') {
       const keys = await store.keys('users:list:*');
       if (keys && keys.length > 0) {

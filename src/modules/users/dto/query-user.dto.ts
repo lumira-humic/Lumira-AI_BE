@@ -1,11 +1,4 @@
-import { 
-  IsOptional, 
-  IsString, 
-  IsEnum, 
-  Min, 
-  Max, 
-  IsIn 
-} from 'class-validator';
+import { IsOptional, IsString, IsEnum, Min, Max, IsIn } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { UserRole } from '../enums/user-role.enum';
@@ -49,9 +42,9 @@ export class QueryUserDto {
   status?: UserStatus;
 
   /** Field to sort by. @default 'createdAt' */
-  @ApiPropertyOptional({ 
-    enum: ['name', 'email', 'role', 'status', 'createdAt'], 
-    default: 'createdAt' 
+  @ApiPropertyOptional({
+    enum: ['name', 'email', 'role', 'status', 'createdAt'],
+    default: 'createdAt',
   })
   @IsOptional()
   @IsIn(['name', 'email', 'role', 'status', 'createdAt'])

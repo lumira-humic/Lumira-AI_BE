@@ -23,9 +23,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
    * If the handler or its controller is decorated with `@Public()`,
    * authentication is bypassed.
    */
-  canActivate(
-    context: ExecutionContext,
-  ): boolean | Promise<boolean> | Observable<boolean> {
+  canActivate(context: ExecutionContext): boolean | Promise<boolean> | Observable<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),

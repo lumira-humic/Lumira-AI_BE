@@ -1,8 +1,8 @@
-import { applyDecorators, Type, HttpStatus } from '@nestjs/common';
+import { applyDecorators, HttpStatus, Type } from '@nestjs/common';
 import { ApiExtraModels, ApiResponse, getSchemaPath } from '@nestjs/swagger';
 import { ApiResponseDto } from '../dto/api-response.dto';
 
-export const ApiSuccessResponse = <Model extends Type<any>>(
+export const ApiSuccessResponse = <Model extends Type<unknown>>(
   model: Model,
   options?: { status?: number; isArray?: boolean },
 ) => {

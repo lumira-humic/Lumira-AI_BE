@@ -1,20 +1,20 @@
-import { 
-  IsEmail, 
-  IsString, 
-  IsNotEmpty, 
-  MaxLength, 
-  MinLength, 
-  IsEnum, 
-  IsOptional 
-} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { UserRole } from '../enums/user-role.enum';
 import { UserStatus } from '../enums/user-status.enum';
 
 /**
  * DTO for creating a new user.
- * 
+ *
  * Used by Admin to create new doctor accounts.
  */
 export class CreateUserDto {
@@ -29,7 +29,7 @@ export class CreateUserDto {
   @ApiProperty({ example: 'budi.santoso@lumira.ai' })
   @IsEmail()
   @IsNotEmpty()
-  @Transform(({ value }) => value?.toLowerCase())
+  @Transform(({ value }: { value: string }) => value?.toLowerCase())
   email: string;
 
   /** Hashed password (will be hashed in service). */

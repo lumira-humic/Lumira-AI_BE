@@ -70,10 +70,6 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       }
     }
 
-    throw new AppException(
-      ErrorCode.AUTH_INVALID_CREDENTIALS,
-      'Invalid email or password',
-      401,
-    );
+    throw new AppException(ErrorCode.AUTH_INVALID_CREDENTIALS, 'Invalid email or password', 401);
   }
 }

@@ -1,10 +1,10 @@
-import { Entity, Column, OneToMany } from 'typeorm';
 import { Exclude } from 'class-transformer';
+import { Column, Entity, OneToMany } from 'typeorm';
 
 import { BaseEntity } from '../../../common/entities/base.entity';
 
-import { MedicalRecord } from '../../medical-records/entities/medical-record.entity';
 import { ChatMessage } from '../../chat/entities/chat-message.entity';
+import { MedicalRecord } from '../../medical-records/entities/medical-record.entity';
 
 /**
  * Patient entity — represents individuals whose medical records are managed.
@@ -33,11 +33,11 @@ export class Patient extends BaseEntity {
   password: string;
 
   /** Contact phone number. */
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   phone: string | null;
 
   /** Residential address. */
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   address: string | null;
 
   // ──────────────────────────── Relations ────────────────────────────

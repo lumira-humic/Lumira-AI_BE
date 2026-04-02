@@ -1,9 +1,9 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import helmet from 'helmet';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as compression from 'compression';
+import helmet from 'helmet';
 
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter, TransformInterceptor } from './common';
@@ -60,4 +60,4 @@ async function bootstrap() {
   logger.log(`Application is running on: ${await app.getUrl()}`);
   logger.log(`Swagger docs are available at: ${await app.getUrl()}/api/docs`);
 }
-bootstrap();
+void bootstrap();

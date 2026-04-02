@@ -3,11 +3,7 @@ import { ApiResponse } from '../interfaces/api-response.interface';
 import { ErrorCode } from '../enums/error-code.enum';
 
 export class ResponseHelper {
-  static success<T>(
-    data: T,
-    message = 'Success',
-    statusCode = HttpStatus.OK,
-  ): ApiResponse<T> {
+  static success<T>(data: T, message = 'Success', statusCode = HttpStatus.OK): ApiResponse<T> {
     return {
       status: 'success',
       statusCode,

@@ -3,14 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
-import { AppException } from '../../../common/exceptions/base.exception';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
+import { AppException } from '../../../common/exceptions/base.exception';
 
-import { UsersRepository } from '../../users/users.repository';
-import { PatientsRepository } from '../../patients/patients.repository';
-import { JwtPayload } from '../interfaces/jwt-payload.interface';
-import { User } from '../../users/entities/user.entity';
 import { Patient } from '../../patients/entities/patient.entity';
+import { PatientsRepository } from '../../patients/patients.repository';
+import { User } from '../../users/entities/user.entity';
+import { UsersRepository } from '../../users/users.repository';
+import { JwtPayload } from '../interfaces/jwt-payload.interface';
 
 /**
  * Passport JWT strategy.
@@ -29,7 +29,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('jwt.secret'),
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+      secretOrKey: configService.get<string>('jwt.secret') as string,
     });
   }
 
@@ -59,11 +60,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     if (!actor) {
-      throw new AppException(
-        ErrorCode.AUTH_TOKEN_INVALID,
-        'Token invalid or expired',
-        401,
-      );
+      throw new AppException(ErrorCode.AUTH_TOKEN_INVALID, 'Token invalid or expired', 401);
     }
 
     return Object.assign(actor, { actorType: payload.actorType });

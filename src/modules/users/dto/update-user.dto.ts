@@ -5,13 +5,11 @@ import { UserStatus } from '../enums/user-status.enum';
 
 /**
  * DTO for updating an existing user account.
- * 
+ *
  * Extends CreateUserDto but excludes `password` (which has its own endpoint).
  * All remaining fields are optional.
  */
-export class UpdateUserDto extends PartialType(
-  OmitType(CreateUserDto, ['password'] as const),
-) {
+export class UpdateUserDto extends PartialType(OmitType(CreateUserDto, ['password'] as const)) {
   @ApiPropertyOptional({ example: 'Dr. Budi Santoso' })
   name?: string;
 

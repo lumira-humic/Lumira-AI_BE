@@ -1,23 +1,23 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
-  Patch, 
-  Param, 
-  Delete, 
-  Query, 
-  UseGuards, 
-  HttpStatus, 
-  HttpCode 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  HttpStatus,
+  HttpCode,
 } from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiResponse, 
-  ApiBearerAuth, 
-  ApiParam, 
-  ApiBody 
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiBody,
 } from '@nestjs/swagger';
 
 import { UsersService } from './users.service';
@@ -29,7 +29,7 @@ import { ResponseHelper } from '../../common/helpers/response.helper';
 
 /**
  * Controller for managing system users.
- * 
+ *
  * Access is restricted via JWT and Role-Based Access Control (RBAC).
  */
 @ApiTags('Users')
@@ -45,9 +45,9 @@ export class UsersController {
   @Post()
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ 
-    summary: 'Create new user', 
-    description: 'Admin only. Used to create new doctor accounts.' 
+  @ApiOperation({
+    summary: 'Create new user',
+    description: 'Admin only. Used to create new doctor accounts.',
   })
   @ApiBody({ type: CreateUserDto })
   @ApiResponse({ status: 201, description: 'User created successfully' })
@@ -64,19 +64,19 @@ export class UsersController {
    */
   @Get()
   @Roles(UserRole.ADMIN, UserRole.DOCTOR)
-  @ApiOperation({ 
-    summary: 'Get list of users', 
-    description: 'Accessible by Admin and Doctor.' 
+  @ApiOperation({
+    summary: 'Get list of users',
+    description: 'Accessible by Admin and Doctor.',
   })
   @ApiResponse({ status: 200, description: 'Users fetched successfully' })
   async findAll(@Query() query: QueryUserDto) {
     const [data, total] = await this.usersService.findAll(query);
     return ResponseHelper.paginate(
-      data, 
-      total, 
-      query.page || 1, 
-      query.limit || 10, 
-      'Users fetched successfully'
+      data,
+      total,
+      query.page || 1,
+      query.limit || 10,
+      'Users fetched successfully',
     );
   }
 
@@ -99,9 +99,9 @@ export class UsersController {
    */
   @Patch(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ 
-    summary: 'Update user', 
-    description: 'Admin only. Password cannot be updated here.' 
+  @ApiOperation({
+    summary: 'Update user',
+    description: 'Admin only. Password cannot be updated here.',
   })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiBody({ type: UpdateUserDto })
@@ -118,9 +118,9 @@ export class UsersController {
    */
   @Delete(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ 
-    summary: 'Delete user (soft delete)', 
-    description: 'Admin only. Data remains in database with deletedAt timestamp.' 
+  @ApiOperation({
+    summary: 'Delete user (soft delete)',
+    description: 'Admin only. Data remains in database with deletedAt timestamp.',
   })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'User deleted successfully' })

@@ -21,7 +21,7 @@ export class ApiResponseDto<T> {
   errorCode?: string;
 
   @ApiProperty({ required: false })
-  errors?: any;
+  errors?: { field: string; message: string }[] | null;
 
   @ApiProperty({ required: false })
   stack?: string;

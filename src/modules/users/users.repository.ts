@@ -15,7 +15,7 @@ export class UsersRepository extends Repository<User> {
 
   /**
    * Find a user by email address.
-   * 
+   *
    * @param email - User's email.
    * @returns User entity or null if not found.
    */
@@ -25,9 +25,9 @@ export class UsersRepository extends Repository<User> {
 
   /**
    * Find a user by email and include the password field.
-   * 
+   *
    * Used for authentication (LocalStrategy).
-   * 
+   *
    * @param email - User's email.
    * @returns User entity with password or null if not found.
    */
@@ -40,9 +40,9 @@ export class UsersRepository extends Repository<User> {
 
   /**
    * Find a user by ID and include the password field.
-   * 
+   *
    * Used for updating password.
-   * 
+   *
    * @param id - User's UUID.
    * @returns User entity with password or null if not found.
    */
@@ -55,19 +55,19 @@ export class UsersRepository extends Repository<User> {
 
   /**
    * Find and count users with filters, search, and pagination.
-   * 
+   *
    * @param queryDto - Filtering and pagination parameters.
    * @returns Tuple of [User entities, total count].
    */
   async findAllWithFilter(queryDto: QueryUserDto): Promise<[User[], number]> {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search, 
-      role, 
-      status, 
-      sortBy = 'createdAt', 
-      sortOrder = 'DESC' 
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      role,
+      status,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC',
     } = queryDto;
 
     const query = this.createQueryBuilder('user');
@@ -84,10 +84,9 @@ export class UsersRepository extends Repository<User> {
 
     // Searching by name or email (ILIKE)
     if (search) {
-      query.andWhere(
-        '(user.name ILIKE :search OR user.email ILIKE :search)',
-        { search: `%${search}%` },
-      );
+      query.andWhere('(user.name ILIKE :search OR user.email ILIKE :search)', {
+        search: `%${search}%`,
+      });
     }
 
     // Sorting

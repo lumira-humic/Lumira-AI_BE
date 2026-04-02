@@ -1,4 +1,4 @@
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
 
 import { BaseEntity } from '../../../common/entities/base.entity';
 
@@ -17,7 +17,7 @@ export class ActivityLog extends BaseEntity {
    *
    * Nullable for system-generated log entries that have no associated user.
    */
-  @Column({ name: 'user_id', nullable: true })
+  @Column({ name: 'user_id', type: 'uuid', nullable: true })
   userId: string | null;
 
   /**
@@ -25,11 +25,11 @@ export class ActivityLog extends BaseEntity {
    *
    * Examples: `'UPLOAD_SCAN'`, `'VALIDATE_RECORD'`, `'ADD_PATIENT'`, `'ADD_DOCTOR'`.
    */
-  @Column({ name: 'action_type', nullable: true })
+  @Column({ name: 'action_type', type: 'varchar', nullable: true })
   actionType: string | null;
 
   /** Human-readable description of the action performed. */
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   description: string | null;
 
   /**
@@ -58,6 +58,6 @@ export class ActivityLog extends BaseEntity {
    *
    * Activity logs are immutable audit records and must not be deleted.
    */
-  @Column({ select: false, nullable: true, insert: false, update: false })
+  @Column({ type: 'timestamptz', select: false, nullable: true, insert: false, update: false })
   declare deletedAt: Date | null;
 }
