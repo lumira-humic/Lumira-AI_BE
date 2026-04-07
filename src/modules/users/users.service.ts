@@ -6,6 +6,8 @@ import { Cache } from 'cache-manager';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { AppException } from '../../common/exceptions/base.exception';
 import { CreateUserDto, QueryUserDto, UpdateUserDto, UserResponseDto } from './dto';
+import { UserRole } from './enums/user-role.enum';
+import { UserStatus } from './enums/user-status.enum';
 import { UsersRepository } from './users.repository';
 
 /** bcrypt salt rounds used for password hashing. */
@@ -150,6 +152,23 @@ export class UsersService {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) {
       throw new AppException(ErrorCode.USER_NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND);
+    }
+
+    if (user.role === UserRole.ADMIN) {
+      const activeAdminCount = await this.usersRepository.count({
+        where: {
+          role: UserRole.ADMIN,
+          status: UserStatus.ACTIVE,
+        },
+      });
+
+      if (activeAdminCount <= 1) {
+        throw new AppException(
+          ErrorCode.FORBIDDEN,
+          'Cannot delete the last active admin account',
+          HttpStatus.FORBIDDEN,
+        );
+      }
     }
 
     await this.usersRepository.softDelete(id);

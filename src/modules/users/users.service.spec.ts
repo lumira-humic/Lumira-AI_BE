@@ -31,6 +31,7 @@ describe('UsersService', () => {
     findByEmail: jest.fn(),
     findAllWithFilter: jest.fn(),
     findOne: jest.fn(),
+    count: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
     softDelete: jest.fn(),
@@ -175,6 +176,7 @@ describe('UsersService', () => {
   describe('delete', () => {
     it('should soft delete user and invalidate cache', async () => {
       repository.findOne.mockResolvedValue(mockUser);
+      repository.count.mockResolvedValue(0);
       mockCacheManager.store.keys.mockResolvedValue(['users:list:1']);
 
       await service.delete('uuid-1');
@@ -189,6 +191,41 @@ describe('UsersService', () => {
       await expect(service.delete('uuid-1')).rejects.toThrow(
         new AppException(ErrorCode.USER_NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND),
       );
+    });
+
+    it('should throw 403 if deleting the last active admin account', async () => {
+      repository.findOne.mockResolvedValue({
+        ...mockUser,
+        id: 'admin-1',
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      });
+      repository.count.mockResolvedValue(1);
+
+      await expect(service.delete('admin-1')).rejects.toThrow(
+        new AppException(
+          ErrorCode.FORBIDDEN,
+          'Cannot delete the last active admin account',
+          HttpStatus.FORBIDDEN,
+        ),
+      );
+
+      expect(repository.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('should allow deleting admin when more than one active admin exists', async () => {
+      repository.findOne.mockResolvedValue({
+        ...mockUser,
+        id: 'admin-1',
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      });
+      repository.count.mockResolvedValue(2);
+      mockCacheManager.store.keys.mockResolvedValue(['users:list:1']);
+
+      await service.delete('admin-1');
+
+      expect(repository.softDelete).toHaveBeenCalledWith('admin-1');
     });
   });
 });

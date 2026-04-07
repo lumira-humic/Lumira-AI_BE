@@ -1,31 +1,31 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
   Query,
   UseGuards,
-  HttpStatus,
-  HttpCode,
 } from '@nestjs/common';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
   ApiBearerAuth,
-  ApiParam,
   ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
 
-import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto, QueryUserDto } from './dto';
-import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from './enums/user-role.enum';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { ResponseHelper } from '../../common/helpers/response.helper';
+import { CreateUserDto, QueryUserDto, UpdateUserDto } from './dto';
+import { UserRole } from './enums/user-role.enum';
+import { UsersService } from './users.service';
 
 /**
  * Controller for managing system users.
@@ -125,6 +125,10 @@ export class UsersController {
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'User deleted successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - cannot delete the last active admin account',
+  })
   async remove(@Param('id') id: string) {
     await this.usersService.delete(id);
     return ResponseHelper.success(null, 'User deleted successfully');
