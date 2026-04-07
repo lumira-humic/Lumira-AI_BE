@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
 
-import { seedAdminUser } from './admin-user.seed';
+import { seedUsers } from './user.seed';
 
 dotenv.config({
   path: path.resolve(process.cwd(), `.env.${process.env.NODE_ENV || 'development'}`),
@@ -26,7 +26,7 @@ async function runSeeds(): Promise<void> {
     await dataSource.initialize();
     console.log('[Seed] Database connection established.');
 
-    await seedAdminUser(dataSource);
+    await seedUsers(dataSource);
 
     console.log('[Seed] All seeds executed successfully.');
   } catch (error) {

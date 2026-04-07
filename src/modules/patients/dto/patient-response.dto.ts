@@ -8,23 +8,23 @@ import { ApiProperty } from '@nestjs/swagger';
  */
 export class PatientResponseDto {
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
-  id: string;
+  id!: string;
 
   @ApiProperty({ example: 'Budi Santoso' })
-  name: string;
+  name!: string;
 
   @ApiProperty({ example: 'budi@mail.com' })
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: '+6281234567890', nullable: true })
-  phone: string | null;
+  phone!: string | null;
 
   @ApiProperty({ example: 'Jl. Merdeka No. 10, Jakarta', nullable: true })
-  address: string | null;
+  address!: string | null;
 
   @ApiProperty()
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiProperty()
-  updatedAt: Date;
+  updatedAt!: Date;
 }

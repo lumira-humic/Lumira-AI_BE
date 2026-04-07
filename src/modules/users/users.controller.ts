@@ -33,7 +33,7 @@ import { ResponseHelper } from '../../common/helpers/response.helper';
  * Access is restricted via JWT and Role-Based Access Control (RBAC).
  */
 @ApiTags('Users')
-@ApiBearerAuth()
+@ApiBearerAuth('BearerAuth')
 @UseGuards(RolesGuard)
 @Controller('users')
 export class UsersController {

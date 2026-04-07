@@ -3,13 +3,13 @@ import { ApiMetaDto } from './api-meta.dto';
 
 export class ApiResponseDto<T> {
   @ApiProperty({ example: 'success', enum: ['success', 'error'] })
-  status: 'success' | 'error';
+  status!: 'success' | 'error';
 
   @ApiProperty({ example: 200 })
-  statusCode: number;
+  statusCode!: number;
 
   @ApiProperty({ example: 'Operation successful' })
-  message: string;
+  message!: string;
 
   @ApiProperty({ required: false })
   data?: T;
