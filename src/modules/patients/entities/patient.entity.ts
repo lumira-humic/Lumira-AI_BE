@@ -16,11 +16,11 @@ import { MedicalRecord } from '../../medical-records/entities/medical-record.ent
 export class Patient extends BaseEntity {
   /** Full name of the patient. */
   @Column({ nullable: false })
-  name: string;
+  name!: string;
 
   /** Email address (unique login identifier). */
   @Column({ unique: true, nullable: false })
-  email: string;
+  email!: string;
 
   /**
    * Hashed password for patient self-registration / login.
@@ -30,23 +30,23 @@ export class Patient extends BaseEntity {
    */
   @Exclude()
   @Column({ nullable: false, select: false })
-  password: string;
+  password!: string;
 
   /** Contact phone number. */
   @Column({ type: 'varchar', nullable: true })
-  phone: string | null;
+  phone!: string | null;
 
   /** Residential address. */
   @Column({ type: 'varchar', nullable: true })
-  address: string | null;
+  address!: string | null;
 
   // ──────────────────────────── Relations ────────────────────────────
 
   /** Medical records belonging to this patient. */
   @OneToMany(() => MedicalRecord, (record) => record.patient)
-  medicalRecords: MedicalRecord[];
+  medicalRecords!: MedicalRecord[];
 
   /** Chat messages involving this patient. */
   @OneToMany(() => ChatMessage, (message) => message.patient)
-  chatMessages: ChatMessage[];
+  chatMessages!: ChatMessage[];
 }

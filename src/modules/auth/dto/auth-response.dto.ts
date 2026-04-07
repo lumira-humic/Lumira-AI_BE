@@ -18,19 +18,19 @@ export class AuthResponseDto {
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
     description: 'Short-lived access token (15 min)',
   })
-  accessToken: string;
+  accessToken!: string;
 
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
     description: 'Long-lived refresh token (7 days)',
   })
-  refreshToken: string;
+  refreshToken!: string;
 
   @ApiProperty({
     description: 'Profile data of the authenticated actor',
     oneOf: [{ $ref: getSchemaPath(UserResponseDto) }, { $ref: getSchemaPath(PatientResponseDto) }],
   })
-  user: UserResponseDto | PatientResponseDto;
+  user!: UserResponseDto | PatientResponseDto;
 }
 
 /**
@@ -41,5 +41,5 @@ export class AccessTokenResponseDto {
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
     description: 'Newly issued access token',
   })
-  accessToken: string;
+  accessToken!: string;
 }

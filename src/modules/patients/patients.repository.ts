@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotImplementedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -25,8 +25,7 @@ export class PatientsRepository extends Repository<Patient> {
    * @param data - Partial patient data to persist.
    * @returns The newly created patient.
    */
-  async createPatient(data: Partial<Patient>): Promise<Patient> {
-    const patient = this.create(data);
-    return await this.save(patient);
+  createPatient(_data: Partial<Patient>): Promise<Patient> {
+    throw new NotImplementedException('Not implemented yet');
   }
 }

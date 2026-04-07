@@ -10,6 +10,11 @@ import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { PatientsModule } from './modules/patients/patients.module';
 import { UsersModule } from './modules/users/users.module';
+import { MedicalRecordsModule } from './modules/medical-records/medical-records.module';
+import { ChatModule } from './modules/chat/chat.module';
+import { StatisticsModule } from './modules/statistics/statistics.module';
+import { MedGemmaModule } from './modules/medgemma/medgemma.module';
+import { AiServiceModule } from './modules/ai-service/ai-service.module';
 
 @Module({
   imports: [
@@ -33,6 +38,11 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
     PatientsModule,
     AuthModule,
+    MedicalRecordsModule,
+    ChatModule,
+    StatisticsModule,
+    MedGemmaModule,
+    AiServiceModule,
   ],
   controllers: [],
   providers: [
