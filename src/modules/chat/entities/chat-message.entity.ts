@@ -16,23 +16,23 @@ import { User } from '../../users/entities/user.entity';
 export class ChatMessage extends BaseEntity {
   /** Foreign key to the patient in the conversation. */
   @Column({ name: 'patient_id' })
-  patientId: string;
+  patientId!: string;
 
   /** Foreign key to the doctor (User) in the conversation. */
   @Column({ name: 'doctor_id' })
-  doctorId: string;
+  doctorId!: string;
 
   /** Indicates whether the message was sent by the doctor or the patient. */
   @Column({ name: 'sender_type', type: 'enum', enum: SenderType })
-  senderType: SenderType;
+  senderType!: SenderType;
 
   /** The message content. */
   @Column({ type: 'text' })
-  message: string;
+  message!: string;
 
   /** Whether the recipient has read this message. */
   @Column({ name: 'is_read', default: false })
-  isRead: boolean;
+  isRead!: boolean;
 
   // ──────────────────────────── Relations ────────────────────────────
 
@@ -41,12 +41,12 @@ export class ChatMessage extends BaseEntity {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'patient_id' })
-  patient: Patient;
+  patient!: Patient;
 
   /** The doctor (User) participating in this conversation. */
   @ManyToOne(() => User, (user) => user.chatMessages, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'doctor_id' })
-  doctor: User;
+  doctor!: User;
 }

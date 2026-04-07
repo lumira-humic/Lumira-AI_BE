@@ -19,13 +19,18 @@ async function bootstrap() {
   const env = configService.get<string>('app.env', 'development');
 
   // Security and Compression Middlewares
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: false,
+      contentSecurityPolicy: false,
+    }),
+  );
   app.use(compression());
 
   // CORS Configuration
   const allowedOrigins = configService.get<string[]>('app.corsOrigins', []);
   app.enableCors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : '*',
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
@@ -46,11 +51,35 @@ async function bootstrap() {
   // Swagger Documentation Setup
   if (env !== 'production') {
     const config = new DocumentBuilder()
-      .setTitle('Lumira AI API')
-      .setDescription('API documentation for Lumira AI application')
-      .setVersion('1.0')
-      .addBearerAuth()
+      .setTitle('Lumira Breast Cancer AI API')
+      .setDescription(
+        'REST API untuk sistem diagnosis kanker payudara berbasis AI.\n\n' +
+          'Dua actor: User (admin/doctor) via web, Patient via mobile app.\n' +
+          'Auth menggunakan JWT Bearer Token via response body.',
+      )
+      .setVersion('1.0.0')
+      .addServer('http://localhost:3000', 'Local Development')
+      .addServer('https://api.lumira.ai', 'Production')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description:
+            'Masukkan JWT access token. Berlaku untuk actor User (admin/doctor) dan Patient.',
+        },
+        'BearerAuth',
+      )
+      .addTag('Auth', 'Login, logout, dan refresh token untuk User dan Patient')
+      .addTag('Users', 'Manajemen akun dokter dan admin — hanya dapat diakses ADMIN')
+      .addTag('Patients', 'Manajemen data pasien oleh dokter')
+      .addTag('Medical Records', 'Upload citra USG, hasil analisis AI, dan validasi dokter')
+      .addTag('Chat', 'Komunikasi antara dokter dan pasien')
+      .addTag('Statistics', 'Dashboard dan statistik KPI')
+      .addTag('MedGemma', 'AI chatbot untuk konsultasi medis')
+      .addTag('AI Service', 'Endpoint prediksi AI native')
       .build();
+
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);
   }
@@ -58,8 +87,8 @@ async function bootstrap() {
   // Graceful Shutdown
   app.enableShutdownHooks();
 
-  await app.listen(port);
-  logger.log(`Application is running on: ${await app.getUrl()}`);
-  logger.log(`Swagger docs are available at: ${await app.getUrl()}/api/docs`);
+  await app.listen(port, 'localhost');
+  logger.log(`Application is running on: http://localhost:${port}`);
+  logger.log(`Swagger docs are available at: http://localhost:${port}/api/docs`);
 }
 void bootstrap();

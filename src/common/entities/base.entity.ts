@@ -14,17 +14,17 @@ import {
 export abstract class BaseEntity {
   /** Unique identifier (UUID v4, auto-generated). */
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   /** Timestamp when the record was created. */
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
+  createdAt!: Date;
 
   /** Timestamp when the record was last updated. */
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   /** Timestamp when the record was soft-deleted (null if active). */
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
-  deletedAt: Date | null;
+  deletedAt!: Date | null;
 }

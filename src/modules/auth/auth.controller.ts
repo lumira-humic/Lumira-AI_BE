@@ -90,7 +90,7 @@ export class AuthController {
   /**
    * Get the profile of the currently authenticated actor.
    */
-  @ApiBearerAuth()
+  @ApiBearerAuth('BearerAuth')
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({
@@ -108,7 +108,7 @@ export class AuthController {
   /**
    * Change the password of the currently authenticated actor.
    */
-  @ApiBearerAuth()
+  @ApiBearerAuth('BearerAuth')
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Change password' })
@@ -162,7 +162,7 @@ export class AuthController {
   /**
    * Logout — invalidate the refresh token in Redis.
    */
-  @ApiBearerAuth()
+  @ApiBearerAuth('BearerAuth')
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
