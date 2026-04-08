@@ -15,6 +15,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
 import { MedGemmaModule } from './modules/medgemma/medgemma.module';
 import { AiServiceModule } from './modules/ai-service/ai-service.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -44,7 +45,7 @@ import { AiServiceModule } from './modules/ai-service/ai-service.module';
     MedGemmaModule,
     AiServiceModule,
   ],
-  controllers: [],
+  controllers: [HealthController],
   providers: [
     // Register JwtAuthGuard as GLOBAL guard
     {

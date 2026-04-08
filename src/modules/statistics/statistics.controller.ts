@@ -6,8 +6,8 @@ import { ApiResponse as ApiResponseType } from '../../common/interfaces/api-resp
 
 import { StatisticsService } from './statistics.service';
 import { ActivityLogDto, StatDetailDto, DoctorStatsDto } from './dto';
-import { RolesGuard } from 'src/common/guards';
-import { Roles } from 'src/common/decorators';
+import { RolesGuard } from '../../common/guards';
+import { Roles } from '../../common/decorators';
 import { UserRole } from '../users';
 
 /**
