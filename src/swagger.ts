@@ -11,7 +11,7 @@ export function setupSwagger(app: INestApplication): void {
     )
     .setVersion('1.0.0')
     .addServer('http://localhost:3000', 'Local Development')
-    .addServer('https://api.lumira.ai', 'Production')
+    .addServer('https://apilumiraai.vercel.app', 'Production')
     .addBearerAuth(
       {
         type: 'http',
