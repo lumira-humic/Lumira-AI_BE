@@ -21,9 +21,13 @@ import {
 } from '@nestjs/swagger';
 
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ErrorCode } from '../../common/enums/error-code.enum';
+import { AppException } from '../../common/exceptions/base.exception';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { ResponseHelper } from '../../common/helpers/response.helper';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateUserDto, QueryUserDto, UpdateUserDto } from './dto';
+import { User } from './entities/user.entity';
 import { UserRole } from './enums/user-role.enum';
 import { UsersService } from './users.service';
 
@@ -60,13 +64,13 @@ export class UsersController {
   }
 
   /**
-   * Get paginated list of users (Admin and Doctor).
+   * Get paginated list of users (Admin only).
    */
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Get list of users',
-    description: 'Accessible by Admin and Doctor.',
+    description: 'Admin only. Returns paginated list of users with search and filter capabilities.',
   })
   @ApiResponse({ status: 200, description: 'Users fetched successfully' })
   async findAll(@Query() query: QueryUserDto) {
@@ -81,35 +85,56 @@ export class UsersController {
   }
 
   /**
-   * Get user detail by ID (Admin and Doctor).
+   * Get user detail by ID (Admin or the doctor themselves).
    */
   @Get(':id')
   @Roles(UserRole.ADMIN, UserRole.DOCTOR)
-  @ApiOperation({ summary: 'Get user by ID' })
+  @ApiOperation({
+    summary: 'Get user by ID',
+    description: 'Admin can view any user. Doctor can only view their own profile.',
+  })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'User fetched successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden — not your profile' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id') id: string, @CurrentUser() actor: User & { actorType: string }) {
+    if (actor.role === UserRole.DOCTOR && actor.id !== id) {
+      throw new AppException(
+        ErrorCode.FORBIDDEN,
+        'You can only view your own profile',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     const result = await this.usersService.findById(id);
     return ResponseHelper.success(result, 'User fetched successfully');
   }
 
   /**
-   * Update user details (Admin only).
+   * Update user details (Admin or the doctor themselves).
    */
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
   @ApiOperation({
     summary: 'Update user',
-    description: 'Admin only. Password cannot be updated here.',
+    description:
+      'Admin can update any user (name, email, role, status). ' +
+      "Admin can also reset a doctor's password (not for admin accounts — use /auth/change-password instead). " +
+      'Doctor can only update their own name and email. ' +
+      'To change their own password, doctors should use POST /auth/change-password.',
   })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiBody({ type: UpdateUserDto })
   @ApiResponse({ status: 200, description: 'User updated successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden — not authorized' })
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({ status: 409, description: 'Email already taken' })
-  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    const result = await this.usersService.update(id, updateUserDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @CurrentUser() actor: User & { actorType: string },
+  ) {
+    const result = await this.usersService.update(id, updateUserDto, actor.id, actor.role);
     return ResponseHelper.success(result, 'User updated successfully');
   }
 

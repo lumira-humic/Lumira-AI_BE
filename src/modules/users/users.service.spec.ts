@@ -152,12 +152,12 @@ describe('UsersService', () => {
   describe('update', () => {
     const updateDto: UpdateUserDto = { name: 'Dr. Budi Updated' };
 
-    it('should update user and invalidate cache', async () => {
+    it('should update user and invalidate cache (admin)', async () => {
       repository.findOne.mockResolvedValue(mockUser);
       repository.save.mockResolvedValue({ ...mockUser, ...updateDto });
       mockCacheManager.store.keys.mockResolvedValue(['users:list:1']);
 
-      const result = await service.update('uuid-1', updateDto);
+      const result = await service.update('uuid-1', updateDto, 'admin-1', UserRole.ADMIN);
 
       expect(repository.save).toHaveBeenCalled();
       expect(cacheManager.del).toHaveBeenCalledWith('users:list:1');
@@ -167,8 +167,95 @@ describe('UsersService', () => {
     it('should throw 404 if user not found', async () => {
       repository.findOne.mockResolvedValue(null);
 
-      await expect(service.update('uuid-1', updateDto)).rejects.toThrow(
+      await expect(service.update('uuid-1', updateDto, 'admin-1', UserRole.ADMIN)).rejects.toThrow(
         new AppException(ErrorCode.USER_NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND),
+      );
+    });
+
+    it('should allow doctor to update own name', async () => {
+      repository.findOne.mockResolvedValue(mockUser);
+      repository.save.mockResolvedValue({ ...mockUser, ...updateDto });
+      mockCacheManager.store.keys.mockResolvedValue([]);
+
+      const result = await service.update(
+        'uuid-1',
+        { name: 'Dr. Budi Updated' },
+        'uuid-1',
+        UserRole.DOCTOR,
+      );
+
+      expect(repository.save).toHaveBeenCalled();
+      expect(result.name).toBe('Dr. Budi Updated');
+    });
+
+    it('should throw 403 if doctor tries to update another user', async () => {
+      repository.findOne.mockResolvedValue(mockUser);
+
+      await expect(
+        service.update('uuid-1', updateDto, 'other-doctor-id', UserRole.DOCTOR),
+      ).rejects.toThrow(
+        new AppException(
+          ErrorCode.FORBIDDEN,
+          'You can only update your own profile',
+          HttpStatus.FORBIDDEN,
+        ),
+      );
+    });
+
+    it('should throw 403 if doctor tries to change role', async () => {
+      repository.findOne.mockResolvedValue(mockUser);
+
+      await expect(
+        service.update('uuid-1', { role: UserRole.ADMIN }, 'uuid-1', UserRole.DOCTOR),
+      ).rejects.toThrow(
+        new AppException(
+          ErrorCode.FORBIDDEN,
+          'Only admin can change user role',
+          HttpStatus.FORBIDDEN,
+        ),
+      );
+    });
+
+    it('should throw 403 if doctor tries to change status', async () => {
+      repository.findOne.mockResolvedValue(mockUser);
+
+      await expect(
+        service.update('uuid-1', { status: UserStatus.INACTIVE }, 'uuid-1', UserRole.DOCTOR),
+      ).rejects.toThrow(
+        new AppException(
+          ErrorCode.FORBIDDEN,
+          'Only admin can change user status',
+          HttpStatus.FORBIDDEN,
+        ),
+      );
+    });
+
+    it('should throw 403 if doctor tries to change password', async () => {
+      repository.findOne.mockResolvedValue(mockUser);
+
+      await expect(
+        service.update('uuid-1', { password: 'NewPass123!' }, 'uuid-1', UserRole.DOCTOR),
+      ).rejects.toThrow(
+        new AppException(
+          ErrorCode.FORBIDDEN,
+          'Only admin can reset password via this endpoint',
+          HttpStatus.FORBIDDEN,
+        ),
+      );
+    });
+
+    it('should throw 403 if admin tries to reset password for admin account', async () => {
+      const adminUser = { ...mockUser, id: 'admin-1', role: UserRole.ADMIN };
+      repository.findOne.mockResolvedValue(adminUser);
+
+      await expect(
+        service.update('admin-1', { password: 'NewPass123!' }, 'admin-1', UserRole.ADMIN),
+      ).rejects.toThrow(
+        new AppException(
+          ErrorCode.FORBIDDEN,
+          'Cannot reset password for admin accounts via this endpoint. Use /auth/change-password instead.',
+          HttpStatus.FORBIDDEN,
+        ),
       );
     });
   });
