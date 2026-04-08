@@ -8,6 +8,7 @@ export const validationSchema = Joi.object({
   PORT: Joi.number().default(3000),
   APP_NAME: Joi.string().default('Lumira AI API'),
   CORS_ORIGINS: Joi.string().default('http://localhost:3000,http://localhost:5173'),
+  SWAGGER_ENABLED: Joi.boolean().default(false),
 
   // Database
   DB_HOST: Joi.string().required(),
