@@ -23,7 +23,7 @@ export function setupSwagger(app: INestApplication): void {
       'BearerAuth',
     )
     .addTag('Auth', 'Login, logout, dan refresh token untuk User dan Patient')
-    .addTag('Users', 'Manajemen akun dokter dan admin — hanya dapat diakses ADMIN')
+    .addTag('Users', 'Manajemen akun dokter dan admin — akses ADMIN & dokter (self)')
     .addTag('Patients', 'Manajemen data pasien oleh dokter')
     .addTag('Medical Records', 'Upload citra USG, hasil analisis AI, dan validasi dokter')
     .addTag('Chat', 'Komunikasi antara dokter dan pasien')
