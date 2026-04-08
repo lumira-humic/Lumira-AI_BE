@@ -9,7 +9,7 @@ let server: express.Application | null = null;
 async function bootstrapServer(): Promise<express.Application> {
   const expressApp = express();
   const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
-    logger: false,
+    logger: ['error', 'warn', 'log'],
   });
   app.enableShutdownHooks();
   await app.init();
