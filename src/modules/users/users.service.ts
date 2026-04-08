@@ -6,6 +6,8 @@ import { Cache } from 'cache-manager';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { AppException } from '../../common/exceptions/base.exception';
 import { CreateUserDto, QueryUserDto, UpdateUserDto, UserResponseDto } from './dto';
+import { UserRole } from './enums/user-role.enum';
+import { UserStatus } from './enums/user-status.enum';
 import { UsersRepository } from './users.repository';
 
 /** bcrypt salt rounds used for password hashing. */
@@ -108,13 +110,64 @@ export class UsersService {
    *
    * @param id - User UUID.
    * @param dto - Updated fields.
+   * @param actorId - The ID of the user performing the update.
+   * @param actorRole - The role of the user performing the update.
    * @returns Mapped response DTO.
-   * @throws AppException if user not found or email is taken.
+   * @throws AppException if user not found, email taken, or unauthorized.
    */
-  async update(id: string, dto: UpdateUserDto): Promise<UserResponseDto> {
+  async update(
+    id: string,
+    dto: UpdateUserDto,
+    actorId: string,
+    actorRole: UserRole,
+  ): Promise<UserResponseDto> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) {
       throw new AppException(ErrorCode.USER_NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Doctor can only update their own profile
+    if (actorRole === UserRole.DOCTOR && actorId !== id) {
+      throw new AppException(
+        ErrorCode.FORBIDDEN,
+        'You can only update your own profile',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    // Doctor cannot change role, status, or password via this endpoint
+    // (doctors can change their own password via POST /auth/change-password)
+    if (actorRole === UserRole.DOCTOR) {
+      if (dto.role) {
+        throw new AppException(
+          ErrorCode.FORBIDDEN,
+          'Only admin can change user role',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      if (dto.status) {
+        throw new AppException(
+          ErrorCode.FORBIDDEN,
+          'Only admin can change user status',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      if (dto.password) {
+        throw new AppException(
+          ErrorCode.FORBIDDEN,
+          'Only admin can reset password via this endpoint',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+    }
+
+    // Admin can only reset password for doctors, not for other admins
+    if (dto.password && user.role === UserRole.ADMIN) {
+      throw new AppException(
+        ErrorCode.FORBIDDEN,
+        'Cannot reset password for admin accounts via this endpoint. Use /auth/change-password instead.',
+        HttpStatus.FORBIDDEN,
+      );
     }
 
     // Check email duplication if email is changing
@@ -127,6 +180,11 @@ export class UsersService {
           HttpStatus.CONFLICT,
         );
       }
+    }
+
+    // Hash password if provided (admin-only path)
+    if (dto.password) {
+      dto.password = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
     }
 
     Object.assign(user, dto);
@@ -150,6 +208,23 @@ export class UsersService {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) {
       throw new AppException(ErrorCode.USER_NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND);
+    }
+
+    if (user.role === UserRole.ADMIN) {
+      const activeAdminCount = await this.usersRepository.count({
+        where: {
+          role: UserRole.ADMIN,
+          status: UserStatus.ACTIVE,
+        },
+      });
+
+      if (activeAdminCount <= 1) {
+        throw new AppException(
+          ErrorCode.FORBIDDEN,
+          'Cannot delete the last active admin account',
+          HttpStatus.FORBIDDEN,
+        );
+      }
     }
 
     await this.usersRepository.softDelete(id);

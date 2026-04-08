@@ -6,16 +6,17 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import * as configs from './config';
 import { validationSchema } from './config/validation.schema';
 
+import { HealthController } from './health.controller';
+import { AiServiceModule } from './modules/ai-service/ai-service.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
-import { PatientsModule } from './modules/patients/patients.module';
-import { UsersModule } from './modules/users/users.module';
-import { MedicalRecordsModule } from './modules/medical-records/medical-records.module';
 import { ChatModule } from './modules/chat/chat.module';
-import { StatisticsModule } from './modules/statistics/statistics.module';
+
 import { MedGemmaModule } from './modules/medgemma/medgemma.module';
-import { AiServiceModule } from './modules/ai-service/ai-service.module';
-import { HealthController } from './health.controller';
+import { MedicalRecordsModule } from './modules/medical-records/medical-records.module';
+import { PatientsModule } from './modules/patients/patients.module';
+import { StatisticsModule } from './modules/statistics/statistics.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
