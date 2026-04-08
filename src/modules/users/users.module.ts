@@ -18,13 +18,22 @@ import { User } from './entities/user.entity';
     CacheModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => ({
-        store: await redisStore({
-          host: configService.get<string>('redis.host', 'localhost'),
-          port: configService.get<number>('redis.port', 6379),
-          password: configService.get<string>('redis.password', ''),
-        }),
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const host = configService.get<string>('redis.host', 'localhost');
+        const port = configService.get<number>('redis.port', 6379);
+        const password = configService.get<string>('redis.password', '');
+
+        const useTls = host.endsWith('.upstash.io');
+
+        return {
+          store: await redisStore({
+            host,
+            port,
+            password,
+            ...(useTls ? { tls: {} } : {}),
+          }),
+        };
+      },
     }),
   ],
   controllers: [UsersController],

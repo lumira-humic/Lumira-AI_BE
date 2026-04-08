@@ -20,11 +20,11 @@ dotenv.config({
  */
 export default new DataSource({
   type: 'postgres',
-  host: process.env.DB_HOST,
+  host: process.env.DB_HOST || process.env.DATABASE_POSTGRES_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432', 10),
-  username: process.env.DB_USERNAME,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  username: process.env.DB_USERNAME || process.env.DATABASE_POSTGRES_USER || 'postgres',
+  password: process.env.DB_PASSWORD || process.env.DATABASE_POSTGRES_PASSWORD || '',
+  database: process.env.DB_NAME || process.env.DATABASE_POSTGRES_DATABASE || 'lumira_ai_db',
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
   entities: [path.join(__dirname, '..', '**', '*.entity{.ts,.js}')],
   migrations: [path.join(__dirname, 'migrations', '*{.ts,.js}')],
