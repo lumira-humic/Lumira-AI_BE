@@ -5,6 +5,7 @@ export const appConfig = registerAs('app', () => ({
   port: parseInt(process.env.PORT || '3000', 10),
   name: process.env.APP_NAME || 'Lumira AI API',
   corsOrigins: process.env.CORS_ORIGINS?.split(',') || [],
+  swaggerEnabled: process.env.SWAGGER_ENABLED === 'true',
 }));
 
 export default appConfig;
