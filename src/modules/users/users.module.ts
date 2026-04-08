@@ -22,6 +22,7 @@ import { User } from './entities/user.entity';
         const host = configService.get<string>('redis.host', 'localhost');
         const port = configService.get<number>('redis.port', 6379);
         const password = configService.get<string>('redis.password', '');
+        const username = configService.get<string>('redis.username', 'default');
 
         const useTls = host.endsWith('.upstash.io');
 
@@ -29,6 +30,7 @@ import { User } from './entities/user.entity';
           store: await redisStore({
             host,
             port,
+            username,
             password,
             ...(useTls ? { tls: {} } : {}),
           }),
