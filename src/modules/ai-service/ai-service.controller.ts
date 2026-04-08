@@ -22,9 +22,9 @@ import { ApiResponse as ApiResponseType } from '../../common/interfaces/api-resp
 
 import { AiServiceService } from './ai-service.service';
 import { PredictionResultDto } from './dto';
-import { RolesGuard } from 'src/common/guards';
+import { RolesGuard } from '../../common/guards';
 import { UserRole } from '../users';
-import { Roles } from 'src/common/decorators';
+import { Roles } from '../../common/decorators';
 
 /**
  * Controller for native AI prediction service endpoints.
