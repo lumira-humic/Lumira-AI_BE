@@ -6,12 +6,15 @@ export const databaseConfig = registerAs(
   'database',
   (): TypeOrmModuleOptions => ({
     type: 'postgres',
-    host: process.env.DB_HOST || 'localhost',
+    host: process.env.DB_HOST || process.env.DATABASE_POSTGRES_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432', 10),
-    username: process.env.DB_USERNAME || 'postgres',
-    password: process.env.DB_PASSWORD || 'secret',
-    database: process.env.DB_NAME || 'lumira_ai_db',
-    ssl: process.env.DB_SSL === 'true',
+    username: process.env.DB_USERNAME || process.env.DATABASE_POSTGRES_USER || 'postgres',
+    password: process.env.DB_PASSWORD || process.env.DATABASE_POSTGRES_PASSWORD || '',
+    database: process.env.DB_NAME || process.env.DATABASE_POSTGRES_DATABASE || 'lumira_ai_db',
+    ssl:
+      process.env.DB_SSL === 'true' || process.env.DATABASE_POSTGRES_SSL === 'true'
+        ? { rejectUnauthorized: false }
+        : false,
     synchronize: process.env.DB_SYNC === 'true',
     logging: process.env.DB_LOGGING === 'true',
     autoLoadEntities: true,
