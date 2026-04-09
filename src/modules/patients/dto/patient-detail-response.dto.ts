@@ -86,7 +86,7 @@ export class PatientDetailResponseDto {
     dto.image = latestRecord?.originalImagePath || null;
     dto.aiGradCamImage = latestRecord?.aiGradcamPath || null;
     dto.doctorBrushImage = latestRecord?.doctorBrushPath || null;
-    dto.latestRecord = latestRecord ? this.medicalRecordToObject(latestRecord) : undefined;
+    dto.latestRecord = latestRecord ? this.medicalRecordToObject(latestRecord) : {};
     dto.medical_records = records ? records.map((r) => this.medicalRecordToObject(r)) : [];
     return dto;
   }

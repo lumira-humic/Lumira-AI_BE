@@ -1,51 +1,123 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
-
+import { Injectable, NotFoundException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import {
   PatientRequestDto,
   PatientListResponseDto,
   PatientDetailResponseDto,
   PatientDto,
+  QueryPatientDto,
 } from './dto';
+import { PatientsRepository } from './patients.repository';
+import { MedicalRecord } from '../medical-records';
+import { AppException, ErrorCode } from 'src/common';
 
 /**
  * Service layer for patient-related business logic.
  */
 @Injectable()
 export class PatientsService {
-  constructor() {}
+  constructor(private readonly patientsRepository: PatientsRepository) {}
 
   /**
    * Retrieve all patients with their latest medical record status.
    */
-  findAll(): Promise<PatientListResponseDto[]> {
-    throw new NotImplementedException('Not implemented yet');
+  async findAll(
+    query: QueryPatientDto,
+  ): Promise<{ data: PatientListResponseDto[]; total: number; page: number; limit: number }> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const search = query.search;
+
+    const [patients, total] = await this.patientsRepository.findAll(page, limit, search);
+
+    const data = patients.map((patient) => PatientListResponseDto.fromEntity(patient));
+
+    return { data, total, page, limit };
   }
 
   /**
    * Create a new patient.
    */
-  create(_dto: PatientRequestDto): Promise<PatientDto> {
-    throw new NotImplementedException('Not implemented yet');
+  async createPatient(dto: PatientRequestDto): Promise<PatientDto> {
+    const existingPatient = await this.patientsRepository.findOne({
+      where: { email: dto.email },
+    });
+
+    if (existingPatient) {
+      throw new AppException(
+        ErrorCode.USER_ALREADY_EXISTS,
+        'Patient with this email already exists',
+        409,
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 12);
+    const patient = await this.patientsRepository.createPatient({
+      name: dto.name,
+      email: dto.email,
+      password: hashedPassword, // Temporary
+      phone: dto.phone ?? null,
+      address: dto.address ?? null,
+    });
+
+    return PatientDto.fromEntity(patient);
   }
 
   /**
    * Retrieve a patient by ID with all their medical records.
    */
-  findById(_id: string): Promise<PatientDetailResponseDto> {
-    throw new NotImplementedException('Not implemented yet');
+  async findById(id: string): Promise<PatientDetailResponseDto> {
+    const patient = await this.patientsRepository.findById(id);
+
+    if (!patient) {
+      throw new NotFoundException('Patient not found');
+    }
+
+    const records = patient.medicalRecords ?? [];
+    const latestRecord: MedicalRecord | undefined = records[0];
+
+    return PatientDetailResponseDto.fromEntity(patient, latestRecord, records);
   }
 
   /**
    * Update patient information.
    */
-  update(_id: string, _dto: PatientRequestDto): Promise<void> {
-    throw new NotImplementedException('Not implemented yet');
+  async update(id: string, dto: PatientRequestDto): Promise<PatientDto> {
+    const patient = await this.patientsRepository.findById(id);
+
+    if (!patient) {
+      throw new NotFoundException('Patient not found');
+    }
+
+    if (dto.email && dto.email !== patient.email) {
+      const existingPatient = await this.patientsRepository.findOne({
+        where: { email: dto.email },
+      });
+      if (existingPatient) {
+        throw new AppException(ErrorCode.USER_ALREADY_EXISTS, 'Email already in use', 409);
+      }
+    }
+
+    patient.name = dto.name;
+    patient.email = dto.email;
+    patient.phone = dto.phone ?? null;
+    patient.address = dto.address ?? null;
+    const updated = await this.patientsRepository.save(patient);
+    return PatientDto.fromEntity(updated);
   }
 
   /**
    * Soft-delete a patient.
    */
-  delete(_id: string): Promise<void> {
-    throw new NotImplementedException('Not implemented yet');
+  async delete(id: string): Promise<PatientDto> {
+    const patient = await this.patientsRepository.findById(id);
+
+    if (!patient) {
+      throw new NotFoundException('Patient not found');
+    }
+
+    const dto = PatientDto.fromEntity(patient);
+    await this.patientsRepository.softRemove(patient);
+    return dto;
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -20,12 +20,57 @@ export class PatientsRepository extends Repository<Patient> {
   }
 
   /**
+   * Retrieve patients with pagination and optional search.
+   *
+   * @param page - Current page number
+   * @param limit - Number of items per page
+   * @param search - Optional search keyword (name/email)
+   * @returns Tuple of [patients, totalCount]
+   */
+  async findAll(page: number, limit: number, search?: string): Promise<[Patient[], number]> {
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.repository.createQueryBuilder('patient');
+
+    if (search) {
+      queryBuilder.andWhere('(patient.name ILIKE :search OR patient.email ILIKE :search)', {
+        search: `%${search}%`,
+      });
+    }
+
+    queryBuilder.skip(skip).take(limit).orderBy('patient.created_at', 'DESC');
+
+    return queryBuilder.getManyAndCount();
+  }
+
+  /**
    * Create and persist a new patient record.
    *
    * @param data - Partial patient data to persist.
    * @returns The newly created patient.
    */
-  createPatient(_data: Partial<Patient>): Promise<Patient> {
-    throw new NotImplementedException('Not implemented yet');
+  async createPatient(data: Partial<Patient>): Promise<Patient> {
+    const patient = this.repository.create(data);
+    return this.repository.save(patient);
+  }
+
+  /**
+   * Retrieve a patient by ID along with all associated medical records.
+   *
+   * @param id - Patient UUID
+   * @returns Patient with related medical recrods (if found), otherwise null
+   */
+  async findById(id: string): Promise<Patient | null> {
+    return this.repository.findOne({
+      where: { id },
+      relations: {
+        medicalRecords: true,
+      },
+      order: {
+        medicalRecords: {
+          updatedAt: 'DESC',
+        },
+      },
+    });
   }
 }
