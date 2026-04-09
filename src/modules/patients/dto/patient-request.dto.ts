@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 /**
  * DTO for creating or updating a patient.
@@ -22,6 +22,15 @@ export class PatientRequestDto {
   @IsEmail()
   @IsNotEmpty()
   email!: string;
+
+  @ApiProperty({
+    example: 'S3cur3P@ss',
+    description: 'Password (min 8 characters)',
+    minLength: 8,
+  })
+  @IsString()
+  @MinLength(8)
+  password: string;
 
   @ApiPropertyOptional({
     example: '+6281234567890',

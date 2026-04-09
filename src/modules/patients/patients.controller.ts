@@ -9,6 +9,9 @@ import {
   HttpStatus,
   HttpCode,
   UseGuards,
+  Query,
+  ParseUUIDPipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,10 +31,12 @@ import {
   PatientListResponseDto,
   PatientDetailResponseDto,
   PatientDto,
+  QueryPatientDto,
 } from './dto';
 import { RolesGuard } from 'src/common/guards';
 import { Roles } from 'src/common/decorators';
 import { UserRole } from '../users';
+import { CurrentUser, JwtPayload } from '../auth';
 
 /**
  * Controller for managing patients.
@@ -61,9 +66,17 @@ export class PatientsController {
     isArray: true,
     description: 'List of patients',
   })
-  async getPatients(): Promise<ApiResponseType<PatientListResponseDto[]>> {
-    const result = await this.patientsService.findAll();
-    return ResponseHelper.success<PatientListResponseDto[]>(result, 'List of patients');
+  async getPatients(
+    @Query() query: QueryPatientDto,
+  ): Promise<ApiResponseType<PatientListResponseDto[]>> {
+    const result = await this.patientsService.findAll(query);
+    return ResponseHelper.paginate<PatientListResponseDto>(
+      result.data,
+      result.total,
+      result.page,
+      result.limit,
+      'List of patients retrieved successfully',
+    );
   }
 
   /**
@@ -72,6 +85,7 @@ export class PatientsController {
   @Post()
   @ApiBearerAuth('BearerAuth')
   @HttpCode(HttpStatus.CREATED)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Add a new patient',
     description: 'Create a new patient record in the system.',
@@ -82,8 +96,12 @@ export class PatientsController {
     type: PatientDto,
     description: 'Patient created successfully',
   })
+  @ApiResponse({
+    status: 409,
+    description: 'Patient already exists',
+  })
   async addPatient(@Body() dto: PatientRequestDto): Promise<ApiResponseType<PatientDto>> {
-    const result = await this.patientsService.create(dto);
+    const result = await this.patientsService.createPatient(dto);
     return ResponseHelper.success<PatientDto>(result, 'Created', HttpStatus.CREATED);
   }
 
@@ -91,6 +109,7 @@ export class PatientsController {
    * Get patient details by ID with all their medical records.
    */
   @Get(':id')
+  @ApiBearerAuth('BearerAuth')
   @ApiOperation({
     summary: 'Get a specific patient by ID with their records',
     description: 'Retrieve detailed patient information including all associated medical records.',
@@ -110,11 +129,22 @@ export class PatientsController {
     status: 404,
     description: 'Patient not found',
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
   async getPatientById(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: JwtPayload,
   ): Promise<ApiResponseType<PatientDetailResponseDto>> {
+    if (user.actorType === 'patient' && user.sub !== id) {
+      throw new ForbiddenException('You are not allowed to access this patient');
+    }
     const result = await this.patientsService.findById(id);
-    return ResponseHelper.success<PatientDetailResponseDto>(result, 'Patient details');
+    return ResponseHelper.success<PatientDetailResponseDto>(
+      result,
+      'Patient details retrieved successfully',
+    );
   }
 
   /**
@@ -122,6 +152,7 @@ export class PatientsController {
    */
   @Put(':id')
   @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('BearerAuth')
   @ApiOperation({
     summary: 'Update a patient',
     description: 'Modify patient information.',
@@ -141,12 +172,25 @@ export class PatientsController {
     status: 404,
     description: 'Patient not found',
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
   async updatePatient(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: PatientRequestDto,
-  ): Promise<ApiResponseType<null>> {
-    await this.patientsService.update(id, dto);
-    return ResponseHelper.success<null>(null, 'Updated efficiently');
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ApiResponseType<PatientDto>> {
+    if (user.actorType === 'patient' && user.sub !== id) {
+      throw new ForbiddenException('You are not allowed to update this patient');
+    }
+
+    if (user.actorType === 'user' && user.role === UserRole.DOCTOR) {
+      throw new ForbiddenException('Doctor is not allowed to  update patient');
+    }
+
+    const result = await this.patientsService.update(id, dto);
+    return ResponseHelper.success(result, 'Updated efficiently');
   }
 
   /**
@@ -154,6 +198,8 @@ export class PatientsController {
    */
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('BearerAuth')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Delete a patient',
     description: 'Soft-delete a patient record.',
@@ -172,8 +218,10 @@ export class PatientsController {
     status: 404,
     description: 'Patient not found',
   })
-  async deletePatient(@Param('id') id: string): Promise<ApiResponseType<null>> {
-    await this.patientsService.delete(id);
-    return ResponseHelper.success<null>(null, 'Deleted successfully');
+  async deletePatient(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ApiResponseType<PatientDto>> {
+    const result = await this.patientsService.delete(id);
+    return ResponseHelper.success(result, 'Deleted successfully');
   }
 }

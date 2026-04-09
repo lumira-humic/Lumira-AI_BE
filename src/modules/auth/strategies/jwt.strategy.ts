@@ -63,6 +63,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new AppException(ErrorCode.AUTH_TOKEN_INVALID, 'Token invalid or expired', 401);
     }
 
-    return Object.assign(actor, { actorType: payload.actorType });
+    return Object.assign(actor, { actorType: payload.actorType, sub: payload.sub });
   }
 }
