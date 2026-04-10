@@ -9,7 +9,7 @@ import {
 } from './dto';
 import { PatientsRepository } from './patients.repository';
 import { MedicalRecord } from '../medical-records';
-import { AppException, ErrorCode } from 'src/common';
+import { AppException, ErrorCode } from '../../common';
 
 /**
  * Service layer for patient-related business logic.
