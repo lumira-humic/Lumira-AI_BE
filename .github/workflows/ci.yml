@@ -1,0 +1,35 @@
+name: Quality Gate - Lint and Build Check
+
+on:
+  push:
+    branches:
+      - development
+  pull_request:
+    branches:
+      - development
+      - main
+
+jobs:
+  quality-gate:
+    name: Run Lint and Production Build Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build smoke check
+        run: npm run build:check

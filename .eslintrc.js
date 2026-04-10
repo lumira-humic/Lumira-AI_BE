@@ -30,6 +30,20 @@ module.exports = {
     // Forbid console.log — use NestJS Logger instead
     'no-console': ['warn', { allow: ['warn', 'error'] }],
 
+    // Prevent TS baseUrl absolute imports (e.g., src/*) that Node cannot resolve at runtime
+    'no-restricted-imports': [
+      'error',
+      {
+        patterns: [
+          {
+            group: ['src/*', 'src/**'],
+            message:
+              'Use relative imports instead of src/* to avoid runtime module resolution errors in production.',
+          },
+        ],
+      },
+    ],
+
     // Interfaces should not have "I" prefix
     '@typescript-eslint/naming-convention': [
       'warn',
@@ -84,6 +98,7 @@ module.exports = {
         '@typescript-eslint/no-unsafe-argument': 'off',
         '@typescript-eslint/no-unsafe-call': 'off',
         '@typescript-eslint/no-unsafe-return': 'off',
+        'no-restricted-imports': 'off',
       },
     },
     {
