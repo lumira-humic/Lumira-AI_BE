@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "build:check": "npm run build && node -e \"require('./dist/src/vercel.js')\"",
+    "build:check": "npm run build && node -e \"const required={NODE_ENV:'test',DB_HOST:'localhost',DB_PORT:'5432',DB_USERNAME:'ci',DB_PASSWORD:'ci',DB_NAME:'ci',REDIS_HOST:'localhost',REDIS_PORT:'6379',JWT_SECRET:'ci-secret',JWT_EXPIRES_IN:'15m',JWT_REFRESH_SECRET:'ci-refresh-secret',JWT_REFRESH_EXPIRES_IN:'7d'};Object.entries(required).forEach(([k,v])=>{if(!process.env[k])process.env[k]=v;});require('./dist/src/vercel.js');\"",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
