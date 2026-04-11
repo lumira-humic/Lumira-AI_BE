@@ -15,6 +15,33 @@ async function bootstrapServer(): Promise<express.Application> {
   });
   const configService = app.get(ConfigService);
   const env = configService.get<string>('app.env', 'development');
+
+  const allowedOrigins = configService
+    .get<string[]>('app.corsOrigins', [])
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
+  app.enableCors({
+    origin: (origin, callback) => {
+      // Allow non-browser requests (e.g. curl, server-to-server).
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const normalizedOrigin = origin.trim().replace(/\/$/, '');
+      const isAllowed = allowedOrigins.length === 0 || allowedOrigins.includes(normalizedOrigin);
+
+      if (isAllowed) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`Origin ${origin} not allowed by CORS`), false);
+    },
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+    optionsSuccessStatus: 204,
+  });
+
   const swaggerEnabled = configService.get<boolean>('app.swaggerEnabled', env !== 'production');
   if (swaggerEnabled) {
     setupSwagger(app);
