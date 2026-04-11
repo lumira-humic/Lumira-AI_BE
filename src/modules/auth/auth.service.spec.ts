@@ -23,8 +23,6 @@ describe('AuthService', () => {
   let patientsRepository: {
     findOne: jest.Mock;
     save: jest.Mock;
-    create: jest.Mock;
-    createPatient: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
   let jwtService: {
@@ -48,8 +46,6 @@ describe('AuthService', () => {
     patientsRepository = {
       findOne: jest.fn(),
       save: jest.fn(),
-      create: jest.fn(),
-      createPatient: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue({
         addSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -98,55 +94,6 @@ describe('AuthService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
-  });
-
-  // ────────────────────────── register ──────────────────────────
-
-  describe('register', () => {
-    it('should register a new patient and return tokens', async () => {
-      const dto = {
-        name: 'Test Patient',
-        email: 'test@mail.com',
-        password: 'password123',
-      };
-
-      patientsRepository.findOne.mockResolvedValue(null);
-      usersRepository.findOne.mockResolvedValue(null);
-      patientsRepository.createPatient.mockResolvedValue({
-        id: 'uuid-patient-1',
-        name: dto.name,
-        email: dto.email,
-        password: 'hashed',
-        phone: null,
-        address: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        deletedAt: null,
-      } as never);
-
-      const result = await service.register(dto);
-
-      expect(result).toHaveProperty('accessToken');
-      expect(result).toHaveProperty('refreshToken');
-      expect(result).toHaveProperty('user');
-      expect(patientsRepository.createPatient).toHaveBeenCalled();
-      expect(cacheManager.set).toHaveBeenCalled();
-    });
-
-    it('should throw 409 if email already exists', async () => {
-      const dto = {
-        name: 'Test',
-        email: 'existing@mail.com',
-        password: 'password123',
-      };
-
-      patientsRepository.findOne.mockResolvedValue({
-        id: 'uuid-existing',
-        email: dto.email,
-      } as never);
-
-      await expect(service.register(dto)).rejects.toThrow('Email is already registered');
-    });
   });
 
   // ────────────────────────── login ──────────────────────────

@@ -9,8 +9,8 @@ import { MedicalRecord } from '../../medical-records/entities/medical-record.ent
 /**
  * Patient entity — represents individuals whose medical records are managed.
  *
- * Patients can register independently; hence the `password` field for
- * authentication. Passwords are excluded from query results and serialization.
+ * Patients can authenticate; hence the `password` field is stored in
+ * hashed form. Passwords are excluded from query results and serialization.
  */
 @Entity('patients')
 export class Patient extends BaseEntity {
@@ -23,7 +23,7 @@ export class Patient extends BaseEntity {
   email!: string;
 
   /**
-   * Hashed password for patient self-registration / login.
+   * Hashed password for patient authentication.
    *
    * Not included in query results by default — use
    * `addSelect('patient.password')` when needed for authentication.
