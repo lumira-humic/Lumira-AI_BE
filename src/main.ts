@@ -28,11 +28,29 @@ async function bootstrap() {
   app.use(compression());
 
   // CORS Configuration
-  const allowedOrigins = configService.get<string[]>('app.corsOrigins', []);
+  const allowedOrigins = configService
+    .get<string[]>('app.corsOrigins', [])
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
   app.enableCors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const normalizedOrigin = origin.trim().replace(/\/$/, '');
+      const isAllowed = allowedOrigins.length === 0 || allowedOrigins.includes(normalizedOrigin);
+
+      if (isAllowed) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`Origin ${origin} not allowed by CORS`), false);
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
+    optionsSuccessStatus: 204,
   });
 
   // Global Validation Pipe
