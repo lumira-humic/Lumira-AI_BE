@@ -19,7 +19,6 @@ import { UsersRepository } from '../users/users.repository';
 import { AccessTokenResponseDto, AuthResponseDto } from './dto/auth-response.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { RegisterDto } from './dto/register.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 
 /** Refresh-token TTL in seconds (7 days). */
@@ -31,7 +30,7 @@ const BCRYPT_ROUNDS = 12;
 /**
  * Core authentication service.
  *
- * Handles registration, login, token management, password changes,
+ * Handles login, token management, password changes,
  * and logout for both User (admin/doctor) and Patient actors.
  */
 @Injectable()
@@ -47,71 +46,6 @@ export class AuthService {
   ) {}
 
   // ──────────────────────────── Public Methods ────────────────────────────
-
-  /**
-   * Register a new patient account.
-   *
-   * Only patients can self-register via the mobile app.
-   * Users (admin/doctor) are created through internal tools.
-   *
-   * @param dto - Registration payload.
-   * @returns Auth response with tokens and patient profile.
-   * @throws AppException if the email is already taken.
-   */
-  async register(dto: RegisterDto): Promise<AuthResponseDto> {
-    // Check if email already exists in patients table
-    const existingPatient = await this.patientsRepository.findOne({
-      where: { email: dto.email },
-    });
-
-    if (existingPatient) {
-      throw new AppException(ErrorCode.USER_ALREADY_EXISTS, 'Email is already registered', 409);
-    }
-
-    // Also check users table to prevent cross-table email conflicts
-    const existingUser = await this.usersRepository.findOne({
-      where: { email: dto.email },
-    });
-
-    if (existingUser) {
-      throw new AppException(ErrorCode.USER_ALREADY_EXISTS, 'Email is already registered', 409);
-    }
-
-    // Hash password and create patient
-    const hashedPassword = await this.hashPassword(dto.password);
-    const patient = await this.patientsRepository.createPatient({
-      name: dto.name,
-      email: dto.email,
-      password: hashedPassword,
-      phone: dto.phone ?? null,
-      address: dto.address ?? null,
-    });
-
-    // Generate tokens
-    const payload: JwtPayload = {
-      sub: patient.id,
-      email: patient.email,
-      role: 'patient',
-      actorType: 'patient',
-    };
-
-    const tokens = await this.generateTokens(payload);
-
-    // Store refresh token in Redis
-    await this.cacheManager.set(
-      `refresh:patient:${patient.id}`,
-      tokens.refreshToken,
-      REFRESH_TOKEN_TTL * 1000,
-    );
-
-    this.logger.log(`Patient registered: ${patient.email}`);
-
-    return {
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      user: this.mapPatientToDto(patient),
-    };
-  }
 
   /**
    * Login an already-validated actor and issue tokens.

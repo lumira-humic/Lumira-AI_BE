@@ -5,7 +5,6 @@ import { ResponseHelper } from '../../common/helpers/response.helper';
 import { ApiResponse as ApiResponseType } from '../../common/interfaces/api-response.interface';
 
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -23,7 +22,7 @@ import { PatientResponseDto } from '../patients/dto/patient-response.dto';
 /**
  * Authentication controller.
  *
- * Provides endpoints for registration, login, profile retrieval,
+ * Provides endpoints for login, profile retrieval,
  * password change, token refresh, and logout. Supports both
  * User (admin/doctor) and Patient actors via a unified API surface.
  */
@@ -31,31 +30,6 @@ import { PatientResponseDto } from '../patients/dto/patient-response.dto';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
-
-  /**
-   * Register a new patient account from the mobile app.
-   */
-  @Public()
-  @Post('register')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({
-    summary: 'Register patient account',
-    description:
-      'Register a new patient account from the mobile app. ' +
-      'All registrations via this endpoint are automatically created as patients.',
-  })
-  @ApiBody({ type: RegisterDto })
-  @ApiResponse({
-    status: 201,
-    type: AuthResponseDto,
-    description: 'Registration successful',
-  })
-  @ApiResponse({ status: 409, description: 'Email already registered' })
-  @ApiResponse({ status: 422, description: 'Validation error' })
-  async register(@Body() dto: RegisterDto): Promise<ApiResponseType<AuthResponseDto>> {
-    const result = await this.authService.register(dto);
-    return ResponseHelper.success(result, 'Registration successful', HttpStatus.CREATED);
-  }
 
   /**
    * Login for User (admin/doctor) and Patient.
