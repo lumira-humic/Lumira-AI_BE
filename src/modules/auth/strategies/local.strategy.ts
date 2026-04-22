@@ -40,13 +40,14 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     email: string,
     password: string,
   ): Promise<(User | Patient) & { actorType: 'user' | 'patient' }> {
-    const normalizedEmail = email.toLowerCase().trim();
+    const sanitizedEmail = this.sanitizeEmail(email);
+    this.assertPasswordIsValidInput(password);
 
     // Try users table first
     const user = await this.usersRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
-      .where('user.email = :email', { email: normalizedEmail })
+      .where('user.email = :email', { email: sanitizedEmail })
       .getOne();
 
     if (user) {
@@ -60,7 +61,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     const patient = await this.patientsRepository
       .createQueryBuilder('patient')
       .addSelect('patient.password')
-      .where('patient.email = :email', { email: normalizedEmail })
+      .where('patient.email = :email', { email: sanitizedEmail })
       .getOne();
 
     if (patient) {
@@ -71,5 +72,25 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     }
 
     throw new AppException(ErrorCode.AUTH_INVALID_CREDENTIALS, 'Invalid email or password', 401);
+  }
+
+  /**
+   * Keep login email as-is (except trimming) for case-sensitive lookup.
+   */
+  private sanitizeEmail(email: string): string {
+    if (typeof email !== 'string') {
+      throw new AppException(ErrorCode.AUTH_INVALID_CREDENTIALS, 'Invalid email or password', 401);
+    }
+
+    return email.trim();
+  }
+
+  /**
+   * Password must be treated as raw input and remain case-sensitive.
+   */
+  private assertPasswordIsValidInput(password: string): void {
+    if (typeof password !== 'string' || password.length === 0) {
+      throw new AppException(ErrorCode.AUTH_INVALID_CREDENTIALS, 'Invalid email or password', 401);
+    }
   }
 }
