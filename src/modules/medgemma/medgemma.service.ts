@@ -61,15 +61,9 @@ export class MedGemmaService {
     role: MedGemmaRole,
     _image?: unknown,
   ): Promise<MedGemmaResponseDto> {
-    const request = dto as {
-      session_id?: string;
-      prompt: string;
-      image?: string;
-    };
-
     const sessionId =
-      typeof request.session_id === 'string' && request.session_id.trim().length > 0
-        ? request.session_id
+      typeof dto.session_id === 'string' && dto.session_id.trim().length > 0
+        ? dto.session_id
         : randomUUID();
 
     // Upsert the session row
@@ -79,11 +73,11 @@ export class MedGemmaService {
     const history = await this.getRecentMessages(sessionId, HISTORY_WINDOW_SIZE);
 
     const aiResult: { response: string; profiling: ProfilingMetrics } = await this.requestProvider(
-      request.prompt,
+      dto.prompt,
       role,
       sessionId,
       history,
-      request.image,
+      dto.image,
     );
 
     // Persist the new user + assistant messages
@@ -94,7 +88,7 @@ export class MedGemmaService {
         session_id: sessionId,
         sender: 'user',
         role,
-        message: request.prompt,
+        message: dto.prompt,
         created_at: now,
       }),
       this.messageRepo.create({

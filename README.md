@@ -107,6 +107,8 @@ Kemudian edit file `.env.development` dan sesuaikan nilainya:
 # App
 NODE_ENV=development
 PORT=3000
+# Optional: dipakai hanya saat mode local + OBJECT_STORAGE_LOCAL_BASE_URL berupa path (mis. /uploads)
+# APP_BASE_URL=http://localhost:3000
 APP_NAME=Lumira AI API
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 
@@ -140,6 +142,18 @@ JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_SECRET=your_refresh_secret_key
 JWT_REFRESH_EXPIRES_IN=7d
+
+# Cloudinary (Object Storage)
+OBJECT_STORAGE_MODE=auto
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+CLOUDINARY_UPLOAD_FOLDER=lumira-ai
+# Optional upload timeout in milliseconds
+CLOUDINARY_UPLOAD_TIMEOUT_MS=60000
+# Optional and only used locally
+OBJECT_STORAGE_LOCAL_UPLOAD_DIR=uploads
+OBJECT_STORAGE_LOCAL_BASE_URL=/uploads
 ```
 
 > ⚠️ **Penting:** Jangan pernah commit file `.env.*` ke repository. File ini sudah di-ignore oleh `.gitignore`.
@@ -155,6 +169,7 @@ docker compose up -d
 ```
 
 Cek status container:
+
 ```bash
 docker compose ps
 ```
@@ -267,16 +282,13 @@ Swagger UI tersedia secara otomatis di environment **non-production**:
 http://localhost:3000/api/docs
 ```
 
-Dokumentasi mencakup semua endpoint yang tersedia beserta schema request/response.
-
----
-
 ## Environment Variables
 
 | Variable | Required | Default | Keterangan |
 |---|---|---|---|
 | `NODE_ENV` | ✅ | `development` | Environment aplikasi |
 | `PORT` | ✅ | `3000` | Port server |
+| `APP_BASE_URL` | ❌ | `http://localhost:3000` | Digunakan jika mode storage adalah `local` dengan path relatif. |
 | `APP_NAME` | ❌ | `Lumira AI API` | Nama aplikasi |
 | `CORS_ORIGINS` | ❌ | `http://localhost:3000,...` | Origin yang diizinkan (comma-separated) |
 | `DB_HOST` | ✅ | — | Host PostgreSQL |
@@ -285,30 +297,63 @@ Dokumentasi mencakup semua endpoint yang tersedia beserta schema request/respons
 | `DB_PASSWORD` | ✅ | — | Password PostgreSQL |
 | `DB_NAME` | ✅ | — | Nama database |
 | `DB_SSL` | ❌ | `false` | Gunakan SSL untuk koneksi DB |
-| `DB_SYNC` | ❌ | `false` | Auto-sync schema (jangan `true` di production!) |
+| `DB_SYNC` | ❌ | `false` | Auto-sync schema (jangan `true` di produksi!) |
 | `DB_LOGGING` | ❌ | `false` | Tampilkan query log TypeORM |
 | `REDIS_HOST` | ✅ | — | Host Redis |
 | `REDIS_PORT` | ✅ | — | Port Redis |
 | `REDIS_PASSWORD` | ❌ | — | Password Redis |
 | `REDIS_TTL` | ❌ | `3600` | TTL cache default (detik) |
-| `MEDGEMMA_PROVIDER_BASE_URL` | ❌ | — | URL endpoint provider MedGemma |
-| `MEDGEMMA_PROVIDER_API_KEY` | ❌ | — | API key untuk provider MedGemma |
-| `MEDGEMMA_PROVIDER_MODEL` | ❌ | `medgemma` | Nama model yang dikirim ke provider |
-| `MEDGEMMA_PROVIDER_TIMEOUT_MS` | ❌ | `30000` | Timeout request provider (ms) |
-| `MEDGEMMA_SESSION_TTL` | ❌ | `86400` | TTL penyimpanan session MedGemma di Redis (detik) |
+| `MEDGEMMA_PROVIDER_BASE_URL` | ✅ | — | URL endpoint provider MedGemma AI |
+| `MEDGEMMA_PROVIDER_API_KEY` | ✅ | — | API key untuk provider MedGemma |
+| `MEDGEMMA_PROVIDER_MODEL` | ❌ | `medgemma` | Nama model AI yang digunakan |
+| `MEDGEMMA_PROVIDER_TIMEOUT_MS` | ❌ | `30000` | Timeout request ke provider (ms) |
 | `JWT_SECRET` | ✅ | — | Secret key JWT access token |
 | `JWT_EXPIRES_IN` | ✅ | — | Durasi access token (contoh: `15m`) |
 | `JWT_REFRESH_SECRET` | ✅ | — | Secret key JWT refresh token |
 | `JWT_REFRESH_EXPIRES_IN` | ✅ | — | Durasi refresh token (contoh: `7d`) |
+| `OBJECT_STORAGE_MODE` | ❌ | `auto` | `auto` (Cloudinary di prod), `cloudinary`, atau `local` |
+| `CLOUDINARY_CLOUD_NAME` | ❌ | — | Required jika mode `cloudinary` |
+| `CLOUDINARY_API_KEY` | ❌ | — | Required jika mode `cloudinary` |
+| `CLOUDINARY_API_SECRET` | ❌ | — | Required jika mode `cloudinary` |
+| `CLOUDINARY_UPLOAD_FOLDER` | ❌ | `lumira-ai` | Folder penyimpanan di Cloudinary |
 | `MAIL_HOST` | ❌ | — | Host SMTP (opsional) |
 | `MAIL_PORT` | ❌ | — | Port SMTP (opsional) |
 | `MAIL_USER` | ❌ | — | Username SMTP (opsional) |
 | `MAIL_PASSWORD` | ❌ | — | Password SMTP (opsional) |
-| `MAIL_FROM` | ❌ | — | Alamat pengirim email (opsional) |
 
-Catatan MedGemma via Cloudflare Tunnel:
-Untuk development, endpoint `*.trycloudflare.com` bisa berubah saat tunnel restart.
-Untuk environment yang stabil (staging/production), gunakan named tunnel + domain tetap agar `MEDGEMMA_PROVIDER_BASE_URL` tidak sering diganti.
+---
+
+## 🤖 MedGemma Chatbot
+
+MedGemma adalah asisten klinis AI yang terintegrasi dalam Lumira AI. Chatbot ini mendukung dua konteks peran: **Doctor (Clinical Assistant)** dan **Patient (Empathetic Assistant)**.
+
+### Fitur Utama
+- **Persistent History**: Riwayat percakapan disimpan secara permanen di database PostgreSQL.
+- **Context Awareness**: Mengirimkan N pesan terakhir ke AI provider untuk menjaga alur percakapan.
+- **Profiling**: Mencatat latensi dan penggunaan token untuk setiap respon AI.
+- **Role-Based Prompts**: Instruksi sistem disesuaikan otomatis berdasarkan peran user (Dokter/Pasien).
+
+### Integrasi Provider
+Server Lumira AI bertindak sebagai proxy ke provider AI eksternal (misalnya OpenAI-compatible API). Gunakan `MEDGEMMA_PROVIDER_BASE_URL` untuk mengarahkan ke endpoint LLM Anda.
+
+---
+
+## ☁️ Cloudinary & Object Storage
+
+Lumira AI mendukung penyimpanan file (foto profil, rekam medis) menggunakan **Cloudinary** atau **Local Storage**.
+
+### Mode Penyimpanan (`OBJECT_STORAGE_MODE`)
+- **`auto`**: Default. Menggunakan `local` di development (`NODE_ENV != production`) dan `cloudinary` di production.
+- **`cloudinary`**: Memaksa penggunaan Cloudinary di semua environment.
+- **`local`**: Menyimpan file di folder `uploads/` pada root project.
+
+### Konfigurasi Cloudinary
+Dapatkan kredensial dari [Cloudinary Dashboard](https://cloudinary.com/console) dan isi variabel berikut:
+```env
+CLOUDINARY_CLOUD_NAME=xxx
+CLOUDINARY_API_KEY=xxx
+CLOUDINARY_API_SECRET=xxx
+```
 
 ---
 
