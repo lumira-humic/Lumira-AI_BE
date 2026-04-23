@@ -1,4 +1,4 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import { ExecutionContext, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import { Observable } from 'rxjs';
@@ -13,6 +13,8 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
  */
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
+  private readonly logger = new Logger(JwtAuthGuard.name);
+
   constructor(private reflector: Reflector) {
     super();
   }
@@ -34,5 +36,31 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     }
 
     return super.canActivate(context);
+  }
+
+  /**
+   * Re-throw the original error from JwtStrategy.validate() instead of
+   * replacing it with a generic UnauthorizedException.
+   *
+   * Passport catches exceptions thrown inside validate() and passes them
+   * as the `err` argument here. Without this override, @nestjs/passport
+   * throws a bare UnauthorizedException that hides the real cause.
+   */
+  handleRequest<TUser = unknown>(err: unknown, user: unknown, info: unknown): TUser {
+    if (err) {
+      // Real error from validate() — re-throw as-is (e.g. AppException)
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`JWT auth error: ${msg}`);
+      throw err;
+    }
+
+    if (!user) {
+      // Token missing, malformed, or expired — info is a JWT error object
+      const reason = info instanceof Error ? info.message : String(info ?? 'No token');
+      this.logger.warn(`JWT auth failed: ${reason}`);
+      throw new UnauthorizedException(reason);
+    }
+
+    return user as TUser;
   }
 }

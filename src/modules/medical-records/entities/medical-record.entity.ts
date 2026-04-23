@@ -24,7 +24,7 @@ export class MedicalRecord extends BaseEntity {
    *
    * Nullable — a record may not yet have a validator assigned.
    */
-  @Column({ name: 'validator_id', type: 'uuid', nullable: true })
+  @Column({ name: 'validator_id', type: 'varchar', length: 32, nullable: true })
   validatorId!: string | null;
 
   /** Path to the original uploaded scan image. */

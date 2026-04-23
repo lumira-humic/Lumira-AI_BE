@@ -5,20 +5,26 @@ import { User } from '../../modules/users/entities/user.entity';
 import { UserRole } from '../../modules/users/enums/user-role.enum';
 import { UserStatus } from '../../modules/users/enums/user-status.enum';
 import { Patient } from '../../modules/patients/entities/patient.entity';
+import { generatePrefixedId } from '../../common/utils/id-generator.util';
 
 /**
  * Seeds admin, doctor and patient records from environment variables.
  *
- * Environment variables (optional per-role):
- * - Admin: `SEED_ADMIN_NAME`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`
- * - Doctor: `SEED_DOCTOR_NAME`, `SEED_DOCTOR_EMAIL`, `SEED_DOCTOR_PASSWORD`
- * - Patient: `SEED_PATIENT_NAME`, `SEED_PATIENT_EMAIL`, `SEED_PATIENT_PASSWORD`
+ * IDs are generated with human-readable prefixes:
+ *   - Admin  → `ADM-XXXXXX`
+ *   - Doctor → `DOC-XXXXXX`
+ *   - Patient → `PAS-XXXXXX`
+ *
+ * Environment variables (all three required per role):
+ *   Admin  : SEED_ADMIN_NAME,   SEED_ADMIN_EMAIL,   SEED_ADMIN_PASSWORD
+ *   Doctor : SEED_DOCTOR_NAME,  SEED_DOCTOR_EMAIL,  SEED_DOCTOR_PASSWORD
+ *   Patient: SEED_PATIENT_NAME, SEED_PATIENT_EMAIL, SEED_PATIENT_PASSWORD
  */
 export async function seedUsers(dataSource: DataSource): Promise<void> {
   const userRepository = dataSource.getRepository(User);
   const patientRepository = dataSource.getRepository(Patient);
 
-  // Admin
+  // ── Admin ──────────────────────────────────────────────────────────────────
   try {
     const adminName = process.env.SEED_ADMIN_NAME;
     const adminEmail = process.env.SEED_ADMIN_EMAIL;
@@ -29,6 +35,7 @@ export async function seedUsers(dataSource: DataSource): Promise<void> {
       if (!adminExists) {
         const hashed = await bcrypt.hash(adminPassword, 10);
         const admin = userRepository.create({
+          id: generatePrefixedId('ADM'),
           name: adminName,
           email: adminEmail,
           password: hashed,
@@ -36,9 +43,9 @@ export async function seedUsers(dataSource: DataSource): Promise<void> {
           status: UserStatus.ACTIVE,
         });
         await userRepository.save(admin);
-        console.log(`[Seed] Admin user created → ${adminEmail}`);
+        console.log(`[Seed] Admin created → ${adminEmail}  (id: ${admin.id})`);
       } else {
-        console.log(`[Seed] Admin user already exists → skipping (${adminEmail})`);
+        console.log(`[Seed] Admin already exists → skip  (${adminEmail}, id: ${adminExists.id})`);
       }
     } else {
       console.log('[Seed] Admin env vars not fully defined → skipping admin seed');
@@ -47,7 +54,7 @@ export async function seedUsers(dataSource: DataSource): Promise<void> {
     console.error('[Seed] Error seeding admin:', err);
   }
 
-  // Doctor
+  // ── Doctor ─────────────────────────────────────────────────────────────────
   try {
     const doctorName = process.env.SEED_DOCTOR_NAME;
     const doctorEmail = process.env.SEED_DOCTOR_EMAIL;
@@ -58,6 +65,7 @@ export async function seedUsers(dataSource: DataSource): Promise<void> {
       if (!docExists) {
         const hashed = await bcrypt.hash(doctorPassword, 10);
         const doctor = userRepository.create({
+          id: generatePrefixedId('DOC'),
           name: doctorName,
           email: doctorEmail,
           password: hashed,
@@ -65,9 +73,9 @@ export async function seedUsers(dataSource: DataSource): Promise<void> {
           status: UserStatus.ACTIVE,
         });
         await userRepository.save(doctor);
-        console.log(`[Seed] Doctor user created → ${doctorEmail}`);
+        console.log(`[Seed] Doctor created → ${doctorEmail}  (id: ${doctor.id})`);
       } else {
-        console.log(`[Seed] Doctor user already exists → skipping (${doctorEmail})`);
+        console.log(`[Seed] Doctor already exists → skip  (${doctorEmail}, id: ${docExists.id})`);
       }
     } else {
       console.log('[Seed] Doctor env vars not fully defined → skipping doctor seed');
@@ -76,7 +84,7 @@ export async function seedUsers(dataSource: DataSource): Promise<void> {
     console.error('[Seed] Error seeding doctor:', err);
   }
 
-  // Patient
+  // ── Patient ────────────────────────────────────────────────────────────────
   try {
     const patientName = process.env.SEED_PATIENT_NAME;
     const patientEmail = process.env.SEED_PATIENT_EMAIL;
@@ -87,6 +95,7 @@ export async function seedUsers(dataSource: DataSource): Promise<void> {
       if (!patientExists) {
         const hashed = await bcrypt.hash(patientPassword, 10);
         const patient = patientRepository.create({
+          id: generatePrefixedId('PAS'),
           name: patientName,
           email: patientEmail,
           password: hashed,
@@ -94,9 +103,11 @@ export async function seedUsers(dataSource: DataSource): Promise<void> {
           address: null,
         });
         await patientRepository.save(patient);
-        console.log(`[Seed] Patient created → ${patientEmail}`);
+        console.log(`[Seed] Patient created → ${patientEmail}  (id: ${patient.id})`);
       } else {
-        console.log(`[Seed] Patient already exists → skipping (${patientEmail})`);
+        console.log(
+          `[Seed] Patient already exists → skip  (${patientEmail}, id: ${patientExists.id})`,
+        );
       }
     } else {
       console.log('[Seed] Patient env vars not fully defined → skipping patient seed');

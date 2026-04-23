@@ -128,6 +128,15 @@ REDIS_PORT=6379
 REDIS_PASSWORD=
 REDIS_TTL=3600
 
+# MedGemma Provider
+# Bisa menggunakan Cloudflare Tunnel endpoint, contoh:
+# https://your-subdomain.trycloudflare.com/v1/chat/completions
+MEDGEMMA_PROVIDER_BASE_URL=https://your-provider-host/v1/chat/completions
+MEDGEMMA_PROVIDER_API_KEY=your_medgemma_api_key
+MEDGEMMA_PROVIDER_MODEL=medgemma
+MEDGEMMA_PROVIDER_TIMEOUT_MS=30000
+MEDGEMMA_SESSION_TTL=86400
+
 # JWT
 JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRES_IN=15m
@@ -273,70 +282,78 @@ Swagger UI tersedia secara otomatis di environment **non-production**:
 http://localhost:3000/api/docs
 ```
 
-Dokumentasi mencakup semua endpoint yang tersedia beserta schema request/response.
+## Environment Variables
+
+| Variable | Required | Default | Keterangan |
+|---|---|---|---|
+| `NODE_ENV` | ✅ | `development` | Environment aplikasi |
+| `PORT` | ✅ | `3000` | Port server |
+| `APP_BASE_URL` | ❌ | `http://localhost:3000` | Digunakan jika mode storage adalah `local` dengan path relatif. |
+| `APP_NAME` | ❌ | `Lumira AI API` | Nama aplikasi |
+| `CORS_ORIGINS` | ❌ | `http://localhost:3000,...` | Origin yang diizinkan (comma-separated) |
+| `DB_HOST` | ✅ | — | Host PostgreSQL |
+| `DB_PORT` | ✅ | — | Port PostgreSQL |
+| `DB_USERNAME` | ✅ | — | Username PostgreSQL |
+| `DB_PASSWORD` | ✅ | — | Password PostgreSQL |
+| `DB_NAME` | ✅ | — | Nama database |
+| `DB_SSL` | ❌ | `false` | Gunakan SSL untuk koneksi DB |
+| `DB_SYNC` | ❌ | `false` | Auto-sync schema (jangan `true` di produksi!) |
+| `DB_LOGGING` | ❌ | `false` | Tampilkan query log TypeORM |
+| `REDIS_HOST` | ✅ | — | Host Redis |
+| `REDIS_PORT` | ✅ | — | Port Redis |
+| `REDIS_PASSWORD` | ❌ | — | Password Redis |
+| `REDIS_TTL` | ❌ | `3600` | TTL cache default (detik) |
+| `MEDGEMMA_PROVIDER_BASE_URL` | ✅ | — | URL endpoint provider MedGemma AI |
+| `MEDGEMMA_PROVIDER_API_KEY` | ✅ | — | API key untuk provider MedGemma |
+| `MEDGEMMA_PROVIDER_MODEL` | ❌ | `medgemma` | Nama model AI yang digunakan |
+| `MEDGEMMA_PROVIDER_TIMEOUT_MS` | ❌ | `30000` | Timeout request ke provider (ms) |
+| `JWT_SECRET` | ✅ | — | Secret key JWT access token |
+| `JWT_EXPIRES_IN` | ✅ | — | Durasi access token (contoh: `15m`) |
+| `JWT_REFRESH_SECRET` | ✅ | — | Secret key JWT refresh token |
+| `JWT_REFRESH_EXPIRES_IN` | ✅ | — | Durasi refresh token (contoh: `7d`) |
+| `OBJECT_STORAGE_MODE` | ❌ | `auto` | `auto` (Cloudinary di prod), `cloudinary`, atau `local` |
+| `CLOUDINARY_CLOUD_NAME` | ❌ | — | Required jika mode `cloudinary` |
+| `CLOUDINARY_API_KEY` | ❌ | — | Required jika mode `cloudinary` |
+| `CLOUDINARY_API_SECRET` | ❌ | — | Required jika mode `cloudinary` |
+| `CLOUDINARY_UPLOAD_FOLDER` | ❌ | `lumira-ai` | Folder penyimpanan di Cloudinary |
+| `MAIL_HOST` | ❌ | — | Host SMTP (opsional) |
+| `MAIL_PORT` | ❌ | — | Port SMTP (opsional) |
+| `MAIL_USER` | ❌ | — | Username SMTP (opsional) |
+| `MAIL_PASSWORD` | ❌ | — | Password SMTP (opsional) |
 
 ---
 
-## Environment Variables
+## 🤖 MedGemma Chatbot
 
-| Variable                          | Required | Default                     | Keterangan                                                                                                                                                |
-| --------------------------------- | -------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                        | ✅       | `development`               | Environment aplikasi                                                                                                                                      |
-| `PORT`                            | ✅       | `3000`                      | Port server                                                                                                                                               |
-| `APP_BASE_URL`                    | ❌       | `http://localhost:3000`     | Opsional. Dipakai hanya jika mode `local` dan `OBJECT_STORAGE_LOCAL_BASE_URL` berupa path relatif. Diabaikan jika pakai URL penuh atau mode `cloudinary`. |
-| `APP_NAME`                        | ❌       | `Lumira AI API`             | Nama aplikasi                                                                                                                                             |
-| `CORS_ORIGINS`                    | ❌       | `http://localhost:3000,...` | Origin yang diizinkan (comma-separated)                                                                                                                   |
-| `DB_HOST`                         | ✅       | —                           | Host PostgreSQL                                                                                                                                           |
-| `DB_PORT`                         | ✅       | —                           | Port PostgreSQL                                                                                                                                           |
-| `DB_USERNAME`                     | ✅       | —                           | Username PostgreSQL                                                                                                                                       |
-| `DB_PASSWORD`                     | ✅       | —                           | Password PostgreSQL                                                                                                                                       |
-| `DB_NAME`                         | ✅       | —                           | Nama database                                                                                                                                             |
-| `DB_SSL`                          | ❌       | `false`                     | Gunakan SSL untuk koneksi DB                                                                                                                              |
-| `DB_SYNC`                         | ❌       | `false`                     | Auto-sync schema (jangan `true` di production!)                                                                                                           |
-| `DB_LOGGING`                      | ❌       | `false`                     | Tampilkan query log TypeORM                                                                                                                               |
-| `REDIS_HOST`                      | ✅       | —                           | Host Redis                                                                                                                                                |
-| `REDIS_PORT`                      | ✅       | —                           | Port Redis                                                                                                                                                |
-| `REDIS_PASSWORD`                  | ❌       | —                           | Password Redis                                                                                                                                            |
-| `REDIS_TTL`                       | ❌       | `3600`                      | TTL cache default (detik)                                                                                                                                 |
-| `JWT_SECRET`                      | ✅       | —                           | Secret key JWT access token                                                                                                                               |
-| `JWT_EXPIRES_IN`                  | ✅       | —                           | Durasi access token (contoh: `15m`)                                                                                                                       |
-| `JWT_REFRESH_SECRET`              | ✅       | —                           | Secret key JWT refresh token                                                                                                                              |
-| `JWT_REFRESH_EXPIRES_IN`          | ✅       | —                           | Durasi refresh token (contoh: `7d`)                                                                                                                       |
-| `OBJECT_STORAGE_MODE`             | ❌       | `auto`                      | Opsional. `auto` => production ke `cloudinary`, selain itu `local`. Bisa dipaksa ke `cloudinary` atau `local`.                                            |
-| `CLOUDINARY_CLOUD_NAME`           | ❌       | —                           | Wajib jika mode aktif `cloudinary` (atau `auto` saat `NODE_ENV=production`).                                                                              |
-| `CLOUDINARY_API_KEY`              | ❌       | —                           | Wajib jika mode aktif `cloudinary` (atau `auto` saat `NODE_ENV=production`).                                                                              |
-| `CLOUDINARY_API_SECRET`           | ❌       | —                           | Wajib jika mode aktif `cloudinary` (atau `auto` saat `NODE_ENV=production`).                                                                              |
-| `CLOUDINARY_UPLOAD_FOLDER`        | ❌       | `lumira-ai`                 | Opsional. Folder default saat upload ke Cloudinary.                                                                                                       |
-| `CLOUDINARY_UPLOAD_TIMEOUT_MS`    | ❌       | `60000`                     | Opsional. Timeout upload Cloudinary (ms).                                                                                                                 |
-| `OBJECT_STORAGE_LOCAL_UPLOAD_DIR` | ❌       | `uploads`                   | Opsional. Dipakai hanya saat mode aktif `local`.                                                                                                          |
-| `OBJECT_STORAGE_LOCAL_BASE_URL`   | ❌       | `/uploads`                  | Opsional. Dipakai hanya saat mode aktif `local`. Boleh path relatif atau URL penuh.                                                                       |
-| `MAIL_HOST`                       | ❌       | —                           | Host SMTP (opsional)                                                                                                                                      |
-| `MAIL_PORT`                       | ❌       | —                           | Port SMTP (opsional)                                                                                                                                      |
-| `MAIL_USER`                       | ❌       | —                           | Username SMTP (opsional)                                                                                                                                  |
-| `MAIL_PASSWORD`                   | ❌       | —                           | Password SMTP (opsional)                                                                                                                                  |
-| `MAIL_FROM`                       | ❌       | —                           | Alamat pengirim email (opsional)                                                                                                                          |
+MedGemma adalah asisten klinis AI yang terintegrasi dalam Lumira AI. Chatbot ini mendukung dua konteks peran: **Doctor (Clinical Assistant)** dan **Patient (Empathetic Assistant)**.
 
-- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, dan `CLOUDINARY_API_SECRET` wajib diisi jika `OBJECT_STORAGE_MODE=cloudinary`, atau saat `OBJECT_STORAGE_MODE=auto` dengan `NODE_ENV=production`.
+### Fitur Utama
+- **Persistent History**: Riwayat percakapan disimpan secara permanen di database PostgreSQL.
+- **Context Awareness**: Mengirimkan N pesan terakhir ke AI provider untuk menjaga alur percakapan.
+- **Profiling**: Mencatat latensi dan penggunaan token untuk setiap respon AI.
+- **Role-Based Prompts**: Instruksi sistem disesuaikan otomatis berdasarkan peran user (Dokter/Pasien).
 
-Catatan upload gambar:
-Upload menerima format `JPG`, `JPEG`, `PNG`, dan `WEBP` dengan ukuran maksimal `5MB`.
+### Integrasi Provider
+Server Lumira AI bertindak sebagai proxy ke provider AI eksternal (misalnya OpenAI-compatible API). Gunakan `MEDGEMMA_PROVIDER_BASE_URL` untuk mengarahkan ke endpoint LLM Anda.
 
-Catatan mode object storage:
+---
 
-- `auto`: otomatis `cloudinary` saat `NODE_ENV=production`, selain itu `local`.
-- `cloudinary`: selalu upload ke Cloudinary.
-- `local`: simpan file ke folder lokal dan expose lewat static route.
+## ☁️ Cloudinary & Object Storage
 
-Catatan URL mode `local`:
+Lumira AI mendukung penyimpanan file (foto profil, rekam medis) menggunakan **Cloudinary** atau **Local Storage**.
 
-- Jika `OBJECT_STORAGE_LOCAL_BASE_URL` bernilai path relatif (contoh `/uploads`), server akan menggabungkannya dengan `APP_BASE_URL`. Jika `APP_BASE_URL` tidak diisi, server fallback ke `http://localhost:<PORT>`.
-- Jika `OBJECT_STORAGE_LOCAL_BASE_URL` sudah URL penuh (contoh `http://localhost:3000/uploads`), server langsung pakai nilai ini dan `APP_BASE_URL` tidak dipakai.
+### Mode Penyimpanan (`OBJECT_STORAGE_MODE`)
+- **`auto`**: Default. Menggunakan `local` di development (`NODE_ENV != production`) dan `cloudinary` di production.
+- **`cloudinary`**: Memaksa penggunaan Cloudinary di semua environment.
+- **`local`**: Menyimpan file di folder `uploads/` pada root project.
 
-Ringkasnya:
-
-- Untuk alur Cloudinary, `APP_BASE_URL` tidak perlu.
-- Untuk alur local dengan URL penuh, `APP_BASE_URL` tidak perlu.
-- `APP_BASE_URL` hanya perlu untuk alur local dengan base URL relatif.
+### Konfigurasi Cloudinary
+Dapatkan kredensial dari [Cloudinary Dashboard](https://cloudinary.com/console) dan isi variabel berikut:
+```env
+CLOUDINARY_CLOUD_NAME=xxx
+CLOUDINARY_API_KEY=xxx
+CLOUDINARY_API_SECRET=xxx
+```
 
 ---
 

@@ -5,6 +5,7 @@ import { Cache } from 'cache-manager';
 
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { AppException } from '../../common/exceptions/base.exception';
+import { generatePrefixedId } from '../../common/utils/id-generator.util';
 import { CreateUserDto, QueryUserDto, UpdateUserDto, UserResponseDto } from './dto';
 import { UserRole } from './enums/user-role.enum';
 import { UserStatus } from './enums/user-status.enum';
@@ -49,8 +50,12 @@ export class UsersService {
 
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
+    // Assign prefixed ID based on role: ADM- for admins, DOC- for doctors
+    const prefix = dto.role === UserRole.ADMIN ? 'ADM' : 'DOC';
+
     const newUser = this.usersRepository.create({
       ...dto,
+      id: generatePrefixedId(prefix),
       password: hashedPassword,
     });
 

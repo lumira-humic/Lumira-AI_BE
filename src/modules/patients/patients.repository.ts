@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Patient } from './entities/patient.entity';
+import { generatePrefixedId } from '../../common/utils/id-generator.util';
 
 /**
  * Custom repository for the Patient entity.
@@ -50,7 +51,10 @@ export class PatientsRepository extends Repository<Patient> {
    * @returns The newly created patient.
    */
   async createPatient(data: Partial<Patient>): Promise<Patient> {
-    const patient = this.repository.create(data);
+    const patient = this.repository.create({
+      ...data,
+      id: generatePrefixedId('PAS'),
+    });
     return this.repository.save(patient);
   }
 

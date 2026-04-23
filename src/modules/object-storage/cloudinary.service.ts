@@ -1,6 +1,11 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { UploadApiErrorResponse, UploadApiOptions, v2 as cloudinary } from 'cloudinary';
+import {
+  UploadApiErrorResponse,
+  UploadApiOptions,
+  UploadApiResponse,
+  v2 as cloudinary,
+} from 'cloudinary';
 
 import { ObjectStorageUploadOptions, StorageUploadResult } from './object-storage.types';
 
@@ -27,6 +32,7 @@ export class CloudinaryStorageService {
     const { cloudName, apiKey, apiSecret, uploadPrefix } = this.cloudinaryConfig;
 
     if (cloudName && apiKey && apiSecret) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       cloudinary.config({
         cloud_name: cloudName,
         api_key: apiKey,
@@ -49,22 +55,29 @@ export class CloudinaryStorageService {
     };
 
     return new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       cloudinary.uploader
-        .upload_stream(cloudinaryOptions, (error: UploadApiErrorResponse | undefined, result) => {
-          if (error) {
-            return reject(
-              new InternalServerErrorException(
-                `Cloudinary upload failed: ${error.message || 'Unknown error'}`,
-              ),
-            );
-          }
+        .upload_stream(
+          cloudinaryOptions,
+          (error: UploadApiErrorResponse | undefined, result: UploadApiResponse | undefined) => {
+            if (error) {
+              return reject(
+                new InternalServerErrorException(
+                  `Cloudinary upload failed: ${error.message || 'Unknown error'}`,
+                ),
+              );
+            }
 
-          if (!result) {
-            return reject(new InternalServerErrorException('Cloudinary upload returned no result'));
-          }
+            if (!result) {
+              return reject(
+                new InternalServerErrorException('Cloudinary upload returned no result'),
+              );
+            }
 
-          return resolve(result);
-        })
+            return resolve(result as StorageUploadResult);
+          },
+        )
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         .end(fileBuffer);
     });
   }
@@ -76,6 +89,7 @@ export class CloudinaryStorageService {
 
     this.assertCloudinaryConfigured();
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
     const response: unknown = await cloudinary.uploader.destroy(publicId, {
       resource_type: 'image',
       invalidate: true,
