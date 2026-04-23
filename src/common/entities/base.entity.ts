@@ -1,19 +1,20 @@
-import {
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
-  DeleteDateColumn,
-} from 'typeorm';
+import { PrimaryColumn, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
 
 /**
  * Abstract base entity shared by all domain entities.
  *
- * Provides UUID primary key, audit timestamps (`createdAt`, `updatedAt`),
- * and soft-delete support via `deletedAt`.
+ * Provides a `varchar` primary key (set explicitly by each entity/service),
+ * audit timestamps (`createdAt`, `updatedAt`), and soft-delete via `deletedAt`.
+ *
+ * ID format convention (set before `save()`):
+ *   - Admin users  → `ADM-{6 digits}`
+ *   - Doctor users → `DOC-{6 digits}`
+ *   - Patients     → `PAS-{6 digits}`
+ *   - Medical recs → `MED-{6 digits}`
  */
 export abstract class BaseEntity {
-  /** Unique identifier (UUID v4, auto-generated). */
-  @PrimaryGeneratedColumn('uuid')
+  /** Unique identifier — must be set explicitly before persisting. */
+  @PrimaryColumn({ type: 'varchar', length: 32 })
   id!: string;
 
   /** Timestamp when the record was created. */

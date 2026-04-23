@@ -1,5 +1,7 @@
 import { Injectable, NotImplementedException } from '@nestjs/common';
 import { MedicalRecordDto, SaveDoctorReviewDto } from './dto';
+// NOTE: When implementing uploadAndAnalyze, assign id: generatePrefixedId('MED')
+// import { generatePrefixedId } from '../../common/utils/id-generator.util';
 
 /**
  * Service for medical records and AI analysis workflows.

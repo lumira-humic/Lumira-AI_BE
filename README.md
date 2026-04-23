@@ -126,6 +126,15 @@ REDIS_PORT=6379
 REDIS_PASSWORD=
 REDIS_TTL=3600
 
+# MedGemma Provider
+# Bisa menggunakan Cloudflare Tunnel endpoint, contoh:
+# https://your-subdomain.trycloudflare.com/v1/chat/completions
+MEDGEMMA_PROVIDER_BASE_URL=https://your-provider-host/v1/chat/completions
+MEDGEMMA_PROVIDER_API_KEY=your_medgemma_api_key
+MEDGEMMA_PROVIDER_MODEL=medgemma
+MEDGEMMA_PROVIDER_TIMEOUT_MS=30000
+MEDGEMMA_SESSION_TTL=86400
+
 # JWT
 JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRES_IN=15m
@@ -282,6 +291,11 @@ Dokumentasi mencakup semua endpoint yang tersedia beserta schema request/respons
 | `REDIS_PORT` | ✅ | — | Port Redis |
 | `REDIS_PASSWORD` | ❌ | — | Password Redis |
 | `REDIS_TTL` | ❌ | `3600` | TTL cache default (detik) |
+| `MEDGEMMA_PROVIDER_BASE_URL` | ❌ | — | URL endpoint provider MedGemma |
+| `MEDGEMMA_PROVIDER_API_KEY` | ❌ | — | API key untuk provider MedGemma |
+| `MEDGEMMA_PROVIDER_MODEL` | ❌ | `medgemma` | Nama model yang dikirim ke provider |
+| `MEDGEMMA_PROVIDER_TIMEOUT_MS` | ❌ | `30000` | Timeout request provider (ms) |
+| `MEDGEMMA_SESSION_TTL` | ❌ | `86400` | TTL penyimpanan session MedGemma di Redis (detik) |
 | `JWT_SECRET` | ✅ | — | Secret key JWT access token |
 | `JWT_EXPIRES_IN` | ✅ | — | Durasi access token (contoh: `15m`) |
 | `JWT_REFRESH_SECRET` | ✅ | — | Secret key JWT refresh token |
@@ -291,6 +305,10 @@ Dokumentasi mencakup semua endpoint yang tersedia beserta schema request/respons
 | `MAIL_USER` | ❌ | — | Username SMTP (opsional) |
 | `MAIL_PASSWORD` | ❌ | — | Password SMTP (opsional) |
 | `MAIL_FROM` | ❌ | — | Alamat pengirim email (opsional) |
+
+Catatan MedGemma via Cloudflare Tunnel:
+Untuk development, endpoint `*.trycloudflare.com` bisa berubah saat tunnel restart.
+Untuk environment yang stabil (staging/production), gunakan named tunnel + domain tetap agar `MEDGEMMA_PROVIDER_BASE_URL` tidak sering diganti.
 
 ---
 
