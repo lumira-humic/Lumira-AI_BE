@@ -1,6 +1,11 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { UploadApiErrorResponse, UploadApiOptions, v2 as cloudinary } from 'cloudinary';
+import {
+  UploadApiErrorResponse,
+  UploadApiOptions,
+  UploadApiResponse,
+  v2 as cloudinary,
+} from 'cloudinary';
 
 import { ObjectStorageUploadOptions, StorageUploadResult } from './object-storage.types';
 
@@ -52,21 +57,26 @@ export class CloudinaryStorageService {
     return new Promise((resolve, reject) => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       cloudinary.uploader
-        .upload_stream(cloudinaryOptions, (error: UploadApiErrorResponse | undefined, result: any) => {
-          if (error) {
-            return reject(
-              new InternalServerErrorException(
-                `Cloudinary upload failed: ${error.message || 'Unknown error'}`,
-              ),
-            );
-          }
+        .upload_stream(
+          cloudinaryOptions,
+          (error: UploadApiErrorResponse | undefined, result: UploadApiResponse | undefined) => {
+            if (error) {
+              return reject(
+                new InternalServerErrorException(
+                  `Cloudinary upload failed: ${error.message || 'Unknown error'}`,
+                ),
+              );
+            }
 
-          if (!result) {
-            return reject(new InternalServerErrorException('Cloudinary upload returned no result'));
-          }
+            if (!result) {
+              return reject(
+                new InternalServerErrorException('Cloudinary upload returned no result'),
+              );
+            }
 
-          return resolve(result);
-        })
+            return resolve(result as StorageUploadResult);
+          },
+        )
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         .end(fileBuffer);
     });
