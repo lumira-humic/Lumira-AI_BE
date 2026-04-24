@@ -56,6 +56,8 @@ async function bootstrap() {
     optionsSuccessStatus: 204,
   });
 
+  app.use('/uploads', express.static('uploads'));
+
   // Global Validation Pipe
   app.useGlobalPipes(
     new ValidationPipe({
