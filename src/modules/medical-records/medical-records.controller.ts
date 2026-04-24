@@ -72,7 +72,6 @@ export class MedicalRecordsController {
       properties: {
         patient_id: {
           type: 'string',
-          format: 'uuid',
           description: 'Patient UUID',
         },
         file: {
@@ -109,7 +108,6 @@ export class MedicalRecordsController {
   @ApiParam({
     name: 'id',
     type: 'string',
-    format: 'uuid',
     description: 'Medical Record UUID',
   })
   @ApiBody({ type: SaveDoctorReviewDto })
@@ -144,7 +142,6 @@ export class MedicalRecordsController {
   @ApiParam({
     name: 'id',
     type: 'string',
-    format: 'uuid',
     description: 'Patient UUID',
   })
   @ApiResponse({

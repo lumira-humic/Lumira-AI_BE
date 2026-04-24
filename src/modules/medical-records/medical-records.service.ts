@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { MedicalRecordDto, SaveDoctorReviewDto } from './dto';
 import { User } from '../users';
+import { generatePrefixedId } from '../../common/utils/id-generator.util';
 import { ValidationStatus } from './enums';
 import { MedicalRecord } from './entities';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -8,8 +9,7 @@ import { Repository } from 'typeorm';
 import { Patient } from '../patients/entities';
 import axios from 'axios';
 import FormData = require('form-data');
-import * as fs from 'fs';
-import * as path from 'path';
+import { CloudinaryStorageService, LocalStorageService } from '../object-storage';
 
 /**
  * Service for medical records and AI analysis workflows.
@@ -22,6 +22,9 @@ export class MedicalRecordsService {
 
     @InjectRepository(Patient)
     private readonly patientRepository: Repository<Patient>,
+
+    private readonly cloudinary: CloudinaryStorageService,
+    private readonly localStorage: LocalStorageService,
   ) {}
 
   /**
@@ -31,7 +34,6 @@ export class MedicalRecordsService {
     const patient = await this.patientRepository.findOne({
       where: { id: patientId },
     });
-
     if (!patient) {
       throw new NotFoundException('Patient not found');
     }
@@ -40,21 +42,25 @@ export class MedicalRecordsService {
       throw new BadRequestException('File is required');
     }
 
-    if (!file.originalname.match(/\.(jpg|jpeg|png)$/)) {
+    if (!file.originalname.match(/\.(jpg|jpeg|png)$/i)) {
       throw new BadRequestException('Invalid file extension');
     }
 
-    const uploadDir = path.join(process.cwd(), 'uploads');
+    const isCloudinary = this.isCloudinary();
 
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir);
+    let imageUrl: string;
+
+    if (isCloudinary) {
+      const result = await this.cloudinary.uploadBuffer(file.buffer, {
+        folder: 'medical-records',
+      });
+      imageUrl = result.secure_url;
+    } else {
+      const result = await this.localStorage.uploadBuffer(file.buffer, {
+        folder: 'medical-records',
+      });
+      imageUrl = result.secure_url;
     }
-
-    const safeName = file.originalname.replace(/\s+/g, '-');
-    const filename = `${Date.now()}-${safeName}`;
-    const filePath = path.join(uploadDir, filename);
-
-    await fs.promises.writeFile(filePath, file.buffer);
 
     const formData = new FormData();
     formData.append('file', file.buffer, file.originalname);
@@ -80,8 +86,7 @@ export class MedicalRecordsService {
         },
       );
       aiResult = response.data;
-    } catch (error) {
-      await fs.promises.unlink(filePath);
+    } catch {
       throw new BadRequestException('AI service failed');
     }
 
@@ -104,17 +109,34 @@ export class MedicalRecordsService {
         throw new BadRequestException('Unknown AI classification');
     }
     const confidence = aiResult.confidence ?? null;
-    const gradcamPath = path.join(uploadDir, `gradcam-${Date.now()}.png`);
 
-    await fs.promises.writeFile(gradcamPath, aiResult.gradcam_base64, 'base64');
+    let gradcamUrl: string | null = null;
+    if (aiResult.gradcam_base64) {
+      const buffer = Buffer.from(aiResult.gradcam_base64, 'base64');
+
+      if (isCloudinary) {
+        const result = await this.cloudinary.uploadBuffer(buffer, {
+          folder: 'gradcam',
+          format: 'png',
+        });
+        gradcamUrl = result.secure_url;
+      } else {
+        const result = await this.localStorage.uploadBuffer(buffer, {
+          folder: 'gradcam',
+          format: 'png',
+        });
+        gradcamUrl = result.secure_url;
+      }
+    }
 
     const record = this.medicalRecordRepository.create({
+      id: generatePrefixedId('MED'),
       patientId,
-      originalImagePath: `http://localhost:3000/uploads/${filename}`,
+      originalImagePath: imageUrl,
       validationStatus: ValidationStatus.PENDING,
       aiDiagnosis: diagnosis,
       aiConfidence: confidence,
-      aiGradcamPath: `http://localhost:3000/uploads/${path.basename(gradcamPath)}`,
+      aiGradcamPath: gradcamUrl ?? null,
       doctorDiagnosis: null,
       doctorNotes: null,
       doctorBrushPath: null,
@@ -135,9 +157,8 @@ export class MedicalRecordsService {
     dto: SaveDoctorReviewDto,
     user: User,
   ): Promise<MedicalRecordDto> {
-    const cleanId = this.extractId(id);
     const record = await this.medicalRecordRepository.findOne({
-      where: { id: cleanId },
+      where: { id },
     });
 
     if (!record) {
@@ -152,10 +173,7 @@ export class MedicalRecordsService {
     record.validatorId = user.id;
     record.validatedAt = new Date();
     record.validationStatus = isAgree ? ValidationStatus.APPROVED : ValidationStatus.REJECTED;
-
-    if (isAgree) {
-      record.doctorDiagnosis = record.aiDiagnosis;
-    }
+    record.doctorDiagnosis = isAgree ? record.aiDiagnosis : null;
 
     const updated = await this.medicalRecordRepository.save(record);
     return this.mapToDto(updated);
@@ -182,13 +200,12 @@ export class MedicalRecordsService {
       throw new NotFoundException('No medical record found for this patient');
     }
 
-    const filePath = path.join(process.cwd(), 'uploads', path.basename(record.originalImagePath));
+    const isCloudinary = this.isCloudinary();
 
-    if (!fs.existsSync(filePath)) {
-      throw new NotFoundException('Original image file not found');
-    }
-
-    const fileBuffer = await fs.promises.readFile(filePath);
+    const response = await axios.get(record.originalImagePath, {
+      responseType: 'arraybuffer',
+    });
+    const fileBuffer = Buffer.from(response.data);
 
     const formData = new FormData();
     formData.append('file', fileBuffer, 'reanalyze.png');
@@ -216,11 +233,6 @@ export class MedicalRecordsService {
 
       aiResult = response.data;
     } catch (error: unknown) {
-      if (axios.isAxiosError(error)) {
-        console.error(error.response?.data || error.message);
-      } else {
-        console.error(error);
-      }
       throw new BadRequestException('AI re-analysis failed');
     }
 
@@ -246,20 +258,29 @@ export class MedicalRecordsService {
 
     const confidence = aiResult.confidence ?? null;
 
-    let gradcamPublicPath: string | null = null;
+    let gradcamUrl: string | null = null;
 
     if (aiResult.gradcam_base64) {
-      const gradcamFilename = `gradcam-${Date.now()}.png`;
-      const gradcamPath = path.join(process.cwd(), 'uploads', gradcamFilename);
+      const buffer = Buffer.from(aiResult.gradcam_base64, 'base64');
 
-      await fs.promises.writeFile(gradcamPath, aiResult.gradcam_base64, 'base64');
-
-      gradcamPublicPath = `http://localhost:3000/uploads/${gradcamFilename}`;
+      if (isCloudinary) {
+        const result = await this.cloudinary.uploadBuffer(buffer, {
+          folder: 'gradcam',
+          format: 'png',
+        });
+        gradcamUrl = result.secure_url;
+      } else {
+        const result = await this.localStorage.uploadBuffer(buffer, {
+          folder: 'gradcam',
+          format: 'png',
+        });
+        gradcamUrl = result.secure_url;
+      }
     }
 
     record.aiDiagnosis = diagnosis;
     record.aiConfidence = confidence;
-    record.aiGradcamPath = gradcamPublicPath;
+    record.aiGradcamPath = gradcamUrl ?? null;
 
     record.validationStatus = ValidationStatus.PENDING;
     record.doctorDiagnosis = null;
@@ -275,7 +296,7 @@ export class MedicalRecordsService {
 
   private mapToDto(record: MedicalRecord): MedicalRecordDto {
     return {
-      id: `MED-${record.id}`,
+      id: record.id,
       patient_id: record.patientId,
       original_image_path: record.originalImagePath,
       validation_status: record.validationStatus,
@@ -290,7 +311,11 @@ export class MedicalRecordsService {
     };
   }
 
-  private extractId(id: string): string {
-    return id.startsWith('MED-') ? id.replace('MED-', '') : id;
+  private isCloudinary(): boolean {
+    return !!(
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET
+    );
   }
 }

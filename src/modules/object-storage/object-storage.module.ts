@@ -8,6 +8,6 @@ import { ObjectStorageService } from './object-storage.service';
 @Module({
   imports: [ConfigModule],
   providers: [CloudinaryStorageService, LocalStorageService, ObjectStorageService],
-  exports: [ObjectStorageService],
+  exports: [CloudinaryStorageService, LocalStorageService, ObjectStorageService],
 })
 export class ObjectStorageModule {}

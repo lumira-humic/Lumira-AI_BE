@@ -48,11 +48,11 @@ export const validationSchema = Joi.object({
   MAIL_FROM: Joi.string().optional(),
 
   // Cloudinary (optional globally, required when upload feature is used)
-  CLOUDINARY_CLOUD_NAME: Joi.string().optional(),
-  CLOUDINARY_API_KEY: Joi.string().optional(),
-  CLOUDINARY_API_SECRET: Joi.string().optional(),
-  CLOUDINARY_UPLOAD_FOLDER: Joi.string().optional(),
-  CLOUDINARY_UPLOAD_PREFIX: Joi.string().uri().optional(),
+  CLOUDINARY_CLOUD_NAME: Joi.string().allow('').optional(),
+  CLOUDINARY_API_KEY: Joi.string().allow('').optional(),
+  CLOUDINARY_API_SECRET: Joi.string().allow('').optional(),
+  CLOUDINARY_UPLOAD_FOLDER: Joi.string().allow('').optional(),
+  CLOUDINARY_UPLOAD_PREFIX: Joi.string().uri().allow('').optional(),
   CLOUDINARY_UPLOAD_TIMEOUT_MS: Joi.number().integer().positive().optional(),
   OBJECT_STORAGE_MODE: Joi.string().valid('auto', 'cloudinary', 'local').optional(),
   OBJECT_STORAGE_LOCAL_UPLOAD_DIR: Joi.string().optional(),

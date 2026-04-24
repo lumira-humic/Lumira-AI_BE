@@ -89,7 +89,7 @@ export class MedicalRecordDto {
 
   static fromEntity(entity: MedicalRecord): MedicalRecordDto {
     const dto = new MedicalRecordDto();
-    dto.id = `MED-${entity.id}`;
+    dto.id = entity.id;
     dto.patient_id = entity.patientId;
     dto.original_image_path = entity.originalImagePath;
     dto.validation_status = entity.validationStatus;
