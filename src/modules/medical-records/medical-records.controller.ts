@@ -8,6 +8,7 @@ import {
   HttpStatus,
   HttpCode,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -27,7 +28,8 @@ import { MedicalRecordsService } from './medical-records.service';
 import { MedicalRecordDto, SaveDoctorReviewDto } from './dto';
 import { RolesGuard } from '../../common/guards';
 import { Roles } from '../../common/decorators';
-import { UserRole } from '../users';
+import { User, UserRole } from '../users';
+import { CurrentUser } from '../auth';
 
 /**
  * Controller for medical records and AI analysis workflows.
@@ -47,7 +49,17 @@ export class MedicalRecordsController {
   @Post('medical-records/upload')
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 }, // max 5MB
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+          return cb(new BadRequestException('Only JPG/PNG allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Upload a medical record image and trigger AI',
@@ -78,7 +90,7 @@ export class MedicalRecordsController {
   })
   async uploadMedicalRecord(
     @Body('patient_id') patientId: string,
-    @UploadedFile() file: unknown,
+    @UploadedFile() file: Express.Multer.File,
   ): Promise<ApiResponseType<MedicalRecordDto>> {
     const result = await this.medicalRecordsService.uploadAndAnalyze(patientId, file);
     return ResponseHelper.success(result, 'Upload successful and AI processing initiated');
@@ -88,7 +100,7 @@ export class MedicalRecordsController {
    * Submit doctor review for an AI diagnosis.
    */
   @Post('medical-records/:id/review')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.DOCTOR)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Submit Doctor Review for an AI diagnosis',
@@ -113,8 +125,9 @@ export class MedicalRecordsController {
   async saveDoctorReview(
     @Param('id') id: string,
     @Body() dto: SaveDoctorReviewDto,
+    @CurrentUser() user: User,
   ): Promise<ApiResponseType<MedicalRecordDto>> {
-    const result = await this.medicalRecordsService.submitDoctorReview(id, dto);
+    const result = await this.medicalRecordsService.submitDoctorReview(id, dto, user);
     return ResponseHelper.success(result, 'Review successfully saved');
   }
 

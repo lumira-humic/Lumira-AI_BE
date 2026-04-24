@@ -49,6 +49,3 @@ lerna-debug.log*
 
 # TypeScript
 *.tsbuildinfo
-
-# Local uploads
-/uploads
