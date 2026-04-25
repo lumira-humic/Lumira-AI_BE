@@ -1,9 +1,11 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { AppException } from '../../common/exceptions/base.exception';
+import { ActivityLog } from '../activities/entities/activity-log.entity';
 import { CreateUserDto, QueryUserDto, UpdateUserDto, UserResponseDto } from './dto';
 import { User } from './entities/user.entity';
 import { UserRole } from './enums/user-role.enum';
@@ -37,6 +39,10 @@ describe('UsersService', () => {
     softDelete: jest.fn(),
   };
 
+  const mockActivityLogRepository = {
+    save: jest.fn(),
+  };
+
   const mockCacheManager = {
     get: jest.fn(),
     set: jest.fn(),
@@ -57,6 +63,10 @@ describe('UsersService', () => {
         {
           provide: CACHE_MANAGER,
           useValue: mockCacheManager,
+        },
+        {
+          provide: getRepositoryToken(ActivityLog),
+          useValue: mockActivityLogRepository,
         },
       ],
     }).compile();
