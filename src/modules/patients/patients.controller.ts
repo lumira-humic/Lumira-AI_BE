@@ -34,7 +34,8 @@ import {
 } from './dto';
 import { RolesGuard } from '../../common/guards';
 import { Roles } from '../../common/decorators';
-import { UserRole } from '../users';
+import { User, UserRole } from '../users';
+import { Patient } from '../patients/entities/patient.entity';
 import { CurrentUser, JwtPayload } from '../auth';
 
 /**
@@ -99,8 +100,11 @@ export class PatientsController {
     status: 409,
     description: 'Patient already exists',
   })
-  async addPatient(@Body() dto: PatientRequestDto): Promise<ApiResponseType<PatientDto>> {
-    const result = await this.patientsService.createPatient(dto);
+  async addPatient(
+    @Body() dto: PatientRequestDto,
+    @CurrentUser() user: User,
+  ): Promise<ApiResponseType<PatientDto>> {
+    const result = await this.patientsService.createPatient(dto, user.id);
     return ResponseHelper.success<PatientDto>(result, 'Created', HttpStatus.CREATED);
   }
 
@@ -178,17 +182,17 @@ export class PatientsController {
   async updatePatient(
     @Param('id') id: string,
     @Body() dto: PatientRequestDto,
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: (User | Patient) & { actorType: string },
   ): Promise<ApiResponseType<PatientDto>> {
-    if (user.actorType === 'patient' && user.sub !== id) {
+    if (user.actorType === 'patient' && user.id !== id) {
       throw new ForbiddenException('You are not allowed to update this patient');
     }
 
-    if (user.actorType === 'user' && user.role === UserRole.DOCTOR) {
-      throw new ForbiddenException('Doctor is not allowed to  update patient');
+    if (user.actorType === 'user' && (user as User).role === UserRole.DOCTOR) {
+      throw new ForbiddenException('Doctor is not allowed to update patient');
     }
 
-    const result = await this.patientsService.update(id, dto);
+    const result = await this.patientsService.update(id, dto, user.id);
     return ResponseHelper.success(result, 'Updated efficiently');
   }
 
@@ -217,8 +221,11 @@ export class PatientsController {
     status: 404,
     description: 'Patient not found',
   })
-  async deletePatient(@Param('id') id: string): Promise<ApiResponseType<PatientDto>> {
-    const result = await this.patientsService.delete(id);
+  async deletePatient(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ): Promise<ApiResponseType<PatientDto>> {
+    const result = await this.patientsService.delete(id, user.id);
     return ResponseHelper.success(result, 'Deleted successfully');
   }
 }

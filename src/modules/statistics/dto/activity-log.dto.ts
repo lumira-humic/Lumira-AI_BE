@@ -23,8 +23,8 @@ export class ActivityLogDto {
   user!: string;
 
   @ApiProperty({
-    example: '2025-04-07T10:30:00Z',
-    description: 'When the action occurred',
+    example: '5 minutes ago',
+    description: 'Relative time when the action occurred',
   })
   time!: string;
 
