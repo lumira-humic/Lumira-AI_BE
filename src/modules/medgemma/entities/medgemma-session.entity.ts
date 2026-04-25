@@ -7,7 +7,7 @@ import { MedGemmaMessage } from './medgemma-message.entity';
  */
 @Entity('medgemma_sessions')
 export class MedGemmaSession {
-  @PrimaryColumn('uuid')
+  @PrimaryColumn({ type: 'varchar', length: 36 })
   id!: string;
 
   /**

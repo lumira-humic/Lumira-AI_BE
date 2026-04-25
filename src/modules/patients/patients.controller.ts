@@ -10,7 +10,6 @@ import {
   HttpCode,
   UseGuards,
   Query,
-  ParseUUIDPipe,
   ForbiddenException,
 } from '@nestjs/common';
 import {
@@ -117,7 +116,7 @@ export class PatientsController {
   @ApiParam({
     name: 'id',
     type: 'string',
-    format: 'uuid',
+    format: 'string',
     description: 'Patient UUID',
   })
   @ApiResponse({
@@ -134,7 +133,7 @@ export class PatientsController {
     description: 'Forbidden',
   })
   async getPatientById(
-    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<ApiResponseType<PatientDetailResponseDto>> {
     if (user.actorType === 'patient' && user.sub !== id) {
@@ -160,7 +159,7 @@ export class PatientsController {
   @ApiParam({
     name: 'id',
     type: 'string',
-    format: 'uuid',
+    format: 'string',
     description: 'Patient UUID',
   })
   @ApiBody({ type: PatientRequestDto })
@@ -177,7 +176,7 @@ export class PatientsController {
     description: 'Forbidden',
   })
   async updatePatient(
-    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('id') id: string,
     @Body() dto: PatientRequestDto,
     @CurrentUser() user: JwtPayload,
   ): Promise<ApiResponseType<PatientDto>> {
@@ -207,7 +206,7 @@ export class PatientsController {
   @ApiParam({
     name: 'id',
     type: 'string',
-    format: 'uuid',
+    format: 'string',
     description: 'Patient UUID',
   })
   @ApiResponse({
@@ -218,9 +217,7 @@ export class PatientsController {
     status: 404,
     description: 'Patient not found',
   })
-  async deletePatient(
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ): Promise<ApiResponseType<PatientDto>> {
+  async deletePatient(@Param('id') id: string): Promise<ApiResponseType<PatientDto>> {
     const result = await this.patientsService.delete(id);
     return ResponseHelper.success(result, 'Deleted successfully');
   }
