@@ -31,7 +31,9 @@ export class PatientsRepository extends Repository<Patient> {
   async findAll(page: number, limit: number, search?: string): Promise<[Patient[], number]> {
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.repository.createQueryBuilder('patient');
+    const queryBuilder = this.repository
+      .createQueryBuilder('patient')
+      .leftJoinAndSelect('patient.medicalRecords', 'medicalRecords');
 
     if (search) {
       queryBuilder.andWhere('(patient.name ILIKE :search OR patient.email ILIKE :search)', {
@@ -39,7 +41,7 @@ export class PatientsRepository extends Repository<Patient> {
       });
     }
 
-    queryBuilder.skip(skip).take(limit).orderBy('patient.created_at', 'DESC');
+    queryBuilder.skip(skip).take(limit).orderBy('patient.createdAt', 'DESC');
 
     return queryBuilder.getManyAndCount();
   }

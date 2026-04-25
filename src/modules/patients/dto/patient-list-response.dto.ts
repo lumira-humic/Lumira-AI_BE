@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Patient } from '../entities/patient.entity';
+import { MedicalRecord } from '../../medical-records/entities/medical-record.entity';
 
 /**
  * Response DTO for patient list view.
@@ -53,10 +54,17 @@ export class PatientListResponseDto {
   })
   review!: string;
 
+  @ApiProperty({
+    description: 'All medical records associated whit this patient',
+    isArray: true,
+  })
+  medical_records!: Record<string, unknown>[];
+
   static fromEntity(
     patient: Patient,
     image?: string | null,
     review?: string,
+    records?: MedicalRecord[],
   ): PatientListResponseDto {
     const dto = new PatientListResponseDto();
     dto.id = patient.id;
@@ -66,6 +74,24 @@ export class PatientListResponseDto {
     dto.address = patient.address;
     dto.image = image || null;
     dto.review = review || 'PENDING';
+    dto.medical_records = records ? records.map((r) => this.medicalRecordToObject(r)) : [];
     return dto;
+  }
+
+  private static medicalRecordToObject(record: MedicalRecord): Record<string, unknown> {
+    return {
+      id: record.id,
+      patient_id: record.patientId,
+      original_image_path: record.originalImagePath,
+      validation_status: record.validationStatus,
+      ai_diagnosis: record.aiDiagnosis,
+      ai_confidence: record.aiConfidence,
+      ai_gradcam_path: record.aiGradcamPath,
+      doctor_diagnosis: record.doctorDiagnosis,
+      doctor_notes: record.doctorNotes,
+      doctor_brush_path: record.doctorBrushPath,
+      uploaded_at: record.uploadedAt,
+      validated_at: record.validatedAt,
+    };
   }
 }
