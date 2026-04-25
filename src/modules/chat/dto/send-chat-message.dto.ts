@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEnum } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /**
  * DTO for sending a chat message.
@@ -11,13 +11,16 @@ export class SendChatMessageDto {
   })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(5000)
   message!: string;
 
   @ApiProperty({
-    description: 'Sender type (doctor or patient)',
-    enum: ['doctor', 'patient'],
-    example: 'patient',
+    description: 'Client-generated idempotency key to avoid duplicate messages on retry',
+    example: 'msg-client-1745482100',
+    required: false,
   })
-  @IsEnum(['doctor', 'patient'])
-  sender_type!: 'doctor' | 'patient';
+  @IsString()
+  @IsOptional()
+  @MaxLength(128)
+  clientMessageId?: string;
 }
