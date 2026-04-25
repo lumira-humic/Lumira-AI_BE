@@ -30,7 +30,16 @@ export class PatientsService {
 
     const [patients, total] = await this.patientsRepository.findAll(page, limit, search);
 
-    const data = patients.map((patient) => PatientListResponseDto.fromEntity(patient));
+    const data = patients.map((patient) => {
+      const records = patient.medicalRecords ?? [];
+      const latestRecord = records[0];
+      return PatientListResponseDto.fromEntity(
+        patient,
+        latestRecord?.originalImagePath ?? null,
+        latestRecord?.validationStatus ?? 'PENDING',
+        records,
+      );
+    });
 
     return { data, total, page, limit };
   }
