@@ -106,6 +106,42 @@ export class FirestoreChatService {
     await batch.commit();
   }
 
+  async markMessageRead(
+    roomId: string,
+    messageId: string,
+    readerId: string,
+    readAt: Date,
+  ): Promise<void> {
+    const firestore = this.firebaseAdminService.getFirestore();
+    if (!firestore) {
+      return;
+    }
+
+    const messageRef = firestore
+      .collection('rooms')
+      .doc(roomId)
+      .collection('messages')
+      .doc(messageId);
+
+    const snapshot = await messageRef.get();
+    if (!snapshot.exists) {
+      return;
+    }
+
+    const data = snapshot.data() || {};
+    if (data.receiver_id !== readerId) {
+      return;
+    }
+
+    await messageRef.set(
+      {
+        is_read: true,
+        read_at: readAt,
+      },
+      { merge: true },
+    );
+  }
+
   async updateRoomFirstContact(roomId: string, at: Date): Promise<void> {
     const firestore = this.firebaseAdminService.getFirestore();
     if (!firestore) {

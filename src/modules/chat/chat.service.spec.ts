@@ -14,6 +14,7 @@ describe('ChatService', () => {
       create: jest.fn(),
       update: jest.fn(),
       findOne: jest.fn(),
+      createQueryBuilder: jest.fn(),
       manager: {
         transaction: jest.fn(),
       },
@@ -24,6 +25,7 @@ describe('ChatService', () => {
       countUnreadByRoomIds: jest.fn(),
       findHistory: jest.fn(),
       findByClientMessageId: jest.fn(),
+      findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
       createQueryBuilder: jest.fn(),
@@ -43,7 +45,9 @@ describe('ChatService', () => {
       enqueueRoomUpsert: jest.fn(),
       enqueueMessageSync: jest.fn(),
       enqueueRoomMessagesRead: jest.fn(),
+      enqueueMessageRead: jest.fn(),
       enqueueRoomFirstContact: jest.fn(),
+      enqueueDoctorNewsActivity: jest.fn(),
       enqueueFcmSend: jest.fn(),
     };
 
@@ -269,6 +273,14 @@ describe('ChatService', () => {
       clientMessageId: 'client-1',
       createdAt: new Date('2026-04-25T10:00:00.000Z'),
     });
+    const roomFirstContactUpdateQB = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    chatRoomRepository.createQueryBuilder.mockReturnValue(roomFirstContactUpdateQB);
 
     await service.sendMessage(
       {
@@ -287,5 +299,45 @@ describe('ChatService', () => {
     expect(chatOutboxService.enqueueMessageSync).toHaveBeenCalledTimes(1);
     expect(chatOutboxService.enqueueFcmSend).toHaveBeenCalledTimes(1);
     expect(chatOutboxService.enqueueRoomFirstContact).toHaveBeenCalledTimes(1);
+    expect(chatOutboxService.enqueueDoctorNewsActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('should mark single message as read and enqueue individual read sync', async () => {
+    const { service, chatRoomRepository, chatMessageRepository, chatOutboxService } =
+      createService();
+
+    chatRoomRepository.findOne.mockResolvedValue({
+      id: 'CHR-000001',
+      patientId: 'PAS-000001',
+      doctorId: 'DOC-000001',
+    });
+    chatMessageRepository.findOne.mockResolvedValue({
+      id: 'CHM-000001',
+      roomId: 'CHR-000001',
+      receiverId: 'DOC-000001',
+      isRead: false,
+    });
+
+    const messageUpdateQB = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    chatMessageRepository.createQueryBuilder.mockReturnValue(messageUpdateQB);
+
+    const updated = await service.markMessageAsRead(
+      {
+        id: 'DOC-000001',
+        actorType: 'user',
+        role: UserRole.DOCTOR,
+      } as User & { actorType: 'user' },
+      'CHR-000001',
+      'CHM-000001',
+    );
+
+    expect(updated).toBe(1);
+    expect(chatOutboxService.enqueueMessageRead).toHaveBeenCalledTimes(1);
   });
 });

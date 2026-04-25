@@ -3,6 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { generatePrefixedId } from '../../common/utils/id-generator.util';
+import { ActivityLog } from '../activities/entities/activity-log.entity';
+import { Patient } from '../patients/entities/patient.entity';
+import { User } from '../users/entities/user.entity';
+import { UserRole } from '../users/enums/user-role.enum';
 import { DeviceTokenRepository } from './device-token.repository';
 import { ChatOutboxEvent } from './entities/chat-outbox-event.entity';
 import { ChatOutboxEventStatus, ChatOutboxEventType } from './enums';
@@ -37,8 +41,22 @@ type RoomMessagesReadPayload = {
   readAt: string;
 };
 
+type MessageReadPayload = {
+  roomId: string;
+  messageId: string;
+  readerId: string;
+  readAt: string;
+};
+
 type RoomFirstContactPayload = {
   roomId: string;
+  at: string;
+};
+
+type DoctorNewsActivityPayload = {
+  roomId: string;
+  doctorId: string;
+  patientId: string;
   at: string;
 };
 
@@ -64,6 +82,12 @@ export class ChatOutboxService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @InjectRepository(ChatOutboxEvent)
     private readonly outboxRepository: Repository<ChatOutboxEvent>,
+    @InjectRepository(ActivityLog)
+    private readonly activityLogRepository: Repository<ActivityLog>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Patient)
+    private readonly patientRepository: Repository<Patient>,
     private readonly firestoreChatService: FirestoreChatService,
     private readonly fcmNotificationService: FcmNotificationService,
     private readonly deviceTokenRepository: DeviceTokenRepository,
@@ -105,8 +129,16 @@ export class ChatOutboxService implements OnModuleInit, OnModuleDestroy {
     await this.enqueue(ChatOutboxEventType.ROOM_MESSAGES_READ, payload);
   }
 
+  async enqueueMessageRead(payload: MessageReadPayload): Promise<void> {
+    await this.enqueue(ChatOutboxEventType.MESSAGE_READ, payload);
+  }
+
   async enqueueRoomFirstContact(payload: RoomFirstContactPayload): Promise<void> {
     await this.enqueue(ChatOutboxEventType.ROOM_FIRST_CONTACT, payload);
+  }
+
+  async enqueueDoctorNewsActivity(payload: DoctorNewsActivityPayload): Promise<void> {
+    await this.enqueue(ChatOutboxEventType.DOCTOR_NEWS_ACTIVITY, payload);
   }
 
   async enqueueFcmSend(payload: FcmSendPayload): Promise<void> {
@@ -289,12 +321,57 @@ export class ChatOutboxService implements OnModuleInit, OnModuleDestroy {
         );
         return;
       }
+      case ChatOutboxEventType.MESSAGE_READ: {
+        const payload = event.payload as unknown as MessageReadPayload;
+        await this.firestoreChatService.markMessageRead(
+          payload.roomId,
+          payload.messageId,
+          payload.readerId,
+          new Date(payload.readAt),
+        );
+        return;
+      }
       case ChatOutboxEventType.ROOM_FIRST_CONTACT: {
         const payload = event.payload as unknown as RoomFirstContactPayload;
         await this.firestoreChatService.updateRoomFirstContact(
           payload.roomId,
           new Date(payload.at),
         );
+        return;
+      }
+      case ChatOutboxEventType.DOCTOR_NEWS_ACTIVITY: {
+        const payload = event.payload as unknown as DoctorNewsActivityPayload;
+        const occurredAt = new Date(payload.at);
+        const existing = await this.activityLogRepository.findOne({
+          where: {
+            userId: payload.doctorId,
+            actionType: 'CHAT_FIRST_CONTACT',
+            timestamp: occurredAt,
+          },
+        });
+
+        if (existing) {
+          return;
+        }
+
+        const [doctor, patient] = await Promise.all([
+          this.userRepository.findOne({ where: { id: payload.doctorId } }),
+          this.patientRepository.findOne({ where: { id: payload.patientId } }),
+        ]);
+
+        if (!doctor || doctor.role !== UserRole.DOCTOR) {
+          return;
+        }
+
+        const patientName = patient?.name || payload.patientId;
+        const activity = this.activityLogRepository.create({
+          id: generatePrefixedId('ACT'),
+          userId: payload.doctorId,
+          actionType: 'CHAT_FIRST_CONTACT',
+          description: `Doctor connected with patient: ${patientName}`,
+          timestamp: occurredAt,
+        });
+        await this.activityLogRepository.save(activity);
         return;
       }
       case ChatOutboxEventType.FCM_SEND: {

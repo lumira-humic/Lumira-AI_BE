@@ -339,12 +339,28 @@ export class ChatService {
       messagePreview,
     });
 
-    if (!room.firstContactNotifiedAt) {
-      room.firstContactNotifiedAt = new Date();
-      await this.chatRoomRepository.save(room);
+    const firstContactAt = new Date();
+    const firstContactUpdate = await this.chatRoomRepository
+      .createQueryBuilder()
+      .update(ChatRoom)
+      .set({
+        firstContactNotifiedAt: firstContactAt,
+        updatedAt: firstContactAt,
+      })
+      .where('id = :roomId', { roomId: room.id })
+      .andWhere('first_contact_notified_at IS NULL')
+      .execute();
+
+    if ((firstContactUpdate.affected || 0) > 0) {
       await this.chatOutboxService.enqueueRoomFirstContact({
         roomId: room.id,
-        at: room.firstContactNotifiedAt.toISOString(),
+        at: firstContactAt.toISOString(),
+      });
+      await this.chatOutboxService.enqueueDoctorNewsActivity({
+        roomId: room.id,
+        doctorId: room.doctorId,
+        patientId: room.patientId,
+        at: firstContactAt.toISOString(),
       });
     }
 
@@ -374,6 +390,50 @@ export class ChatService {
     });
 
     return updateResult.affected || 0;
+  }
+
+  async markMessageAsRead(actor: AuthActor, roomId: string, messageId: string): Promise<number> {
+    const room = await this.getRoomOrThrow(roomId);
+    this.assertActorCanAccessRoom(actor, room);
+
+    const message = await this.chatMessageRepository.findOne({
+      where: { id: messageId, roomId },
+    });
+
+    if (!message) {
+      throw new AppException(ErrorCode.NOT_FOUND, 'Chat message not found', 404);
+    }
+
+    if (message.receiverId !== actor.id) {
+      throw new AppException(
+        ErrorCode.FORBIDDEN,
+        'You are not allowed to mark this message as read',
+        403,
+      );
+    }
+
+    const readAt = new Date();
+    const updateResult = await this.chatMessageRepository
+      .createQueryBuilder()
+      .update(ChatMessage)
+      .set({ isRead: true })
+      .where('id = :messageId', { messageId })
+      .andWhere('room_id = :roomId', { roomId })
+      .andWhere('receiver_id = :readerId', { readerId: actor.id })
+      .andWhere('is_read = false')
+      .execute();
+
+    const updated = updateResult.affected || 0;
+    if (updated > 0) {
+      await this.chatOutboxService.enqueueMessageRead({
+        roomId,
+        messageId,
+        readerId: actor.id,
+        readAt: readAt.toISOString(),
+      });
+    }
+
+    return updated;
   }
 
   private async getRoomOrThrow(roomId: string): Promise<ChatRoom> {

@@ -25,6 +25,10 @@ import {
 import { ResponseHelper } from '../../common/helpers/response.helper';
 import { ApiResponse as ApiResponseType } from '../../common/interfaces/api-response.interface';
 
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
+import { Patient } from '../patients/entities/patient.entity';
+import { User } from '../users/entities/user.entity';
 import { ChatService } from './chat.service';
 import {
   ChatHistoryGroupDto,
@@ -37,10 +41,6 @@ import {
   RemoveDeviceTokenDto,
   SendChatMessageDto,
 } from './dto';
-import { Public } from '../auth/decorators/public.decorator';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Patient } from '../patients/entities/patient.entity';
-import { User } from '../users/entities/user.entity';
 
 /**
  * Controller for doctor-patient chat communication.
@@ -358,6 +358,70 @@ export class ChatController {
   ): Promise<ApiResponseType<{ updated: number }>> {
     const updated = await this.chatService.markRoomAsRead(actor, roomId);
     return ResponseHelper.success({ updated }, 'Messages marked as read');
+  }
+
+  // ---------------------------------------------------------------------------
+  // PUT /chat/rooms/:room_id/messages/:message_id/read
+  // ---------------------------------------------------------------------------
+
+  @Put('rooms/:room_id/messages/:message_id/read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mark single message as read',
+    description: 'Marks a single unread message as read for the current actor. ',
+  })
+  @ApiParam({
+    name: 'room_id',
+    type: String,
+    description: 'Chat room ID (e.g. CHR-123456).',
+    example: 'CHR-123456',
+  })
+  @ApiParam({
+    name: 'message_id',
+    type: String,
+    description: 'Chat message ID (e.g. CHM-123456).',
+    example: 'CHM-123456',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Message read status updated.',
+    schema: {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            status: { type: 'string', example: 'success' },
+            statusCode: { type: 'number', example: 200 },
+            message: { type: 'string', example: 'Message marked as read' },
+            data: {
+              type: 'object',
+              properties: {
+                updated: {
+                  type: 'number',
+                  example: 1,
+                  description: 'Number of messages that were marked as read (0 or 1).',
+                },
+              },
+              required: ['updated'],
+            },
+          },
+        },
+      ],
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid JWT.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden — caller cannot mark message as read.',
+  })
+  @ApiResponse({ status: 404, description: 'Chat room or message not found.' })
+  async markMessageAsRead(
+    @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
+    @Param('room_id') roomId: string,
+    @Param('message_id') messageId: string,
+  ): Promise<ApiResponseType<{ updated: number }>> {
+    const updated = await this.chatService.markMessageAsRead(actor, roomId, messageId);
+    return ResponseHelper.success({ updated }, 'Message marked as read');
   }
 
   // ---------------------------------------------------------------------------

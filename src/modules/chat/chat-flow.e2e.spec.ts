@@ -186,6 +186,23 @@ class ChatServiceE2EMock {
     });
     return updated;
   }
+
+  markMessageAsRead(actor: { id: string }, roomId: string, messageId: string): number {
+    const target = this.messages.find(
+      (message) =>
+        message.room_id === roomId &&
+        message.id === messageId &&
+        message.receiver_id === actor.id &&
+        message.is_read === false,
+    );
+
+    if (!target) {
+      return 0;
+    }
+
+    target.is_read = true;
+    return 1;
+  }
 }
 
 describe('Chat Flow (e2e-like)', () => {
@@ -228,6 +245,13 @@ describe('Chat Flow (e2e-like)', () => {
       .post(`/chat/rooms/${roomId}/messages`)
       .send({ message: 'Halo dok', clientMessageId: 'msg-1' })
       .expect(201);
+
+    const individualReadResponse = await request(server)
+      .put(`/chat/rooms/${roomId}/messages/CHM-000001/read`)
+      .set('x-actor-type', 'user')
+      .set('x-actor-id', 'DOC-000001')
+      .expect(200);
+    expect(individualReadResponse.body.data.updated).toBe(1);
 
     await request(server)
       .post(`/chat/rooms/${roomId}/messages`)
