@@ -73,6 +73,7 @@ export class MedicalRecordsController {
         patient_id: {
           type: 'string',
           description: 'Patient UUID',
+          example: 'PAS-304618',
         },
         file: {
           type: 'string',

@@ -52,12 +52,14 @@ export class MedicalRecordsService {
 
     if (isCloudinary) {
       const result = await this.cloudinary.uploadBuffer(file.buffer, {
-        folder: 'medical-records',
+        folder: 'raw',
+        format: 'png',
       });
       imageUrl = result.secure_url;
     } else {
       const result = await this.localStorage.uploadBuffer(file.buffer, {
-        folder: 'medical-records',
+        folder: 'raw',
+        format: 'png',
       });
       imageUrl = result.secure_url;
     }
@@ -112,6 +114,10 @@ export class MedicalRecordsService {
 
     let gradcamUrl: string | null = null;
     if (aiResult.gradcam_base64) {
+      if (typeof aiResult.gradcam_base64 !== 'string') {
+        throw new BadRequestException('Invalid gradcam format');
+      }
+
       const buffer = Buffer.from(aiResult.gradcam_base64, 'base64');
 
       if (isCloudinary) {
@@ -169,7 +175,37 @@ export class MedicalRecordsService {
 
     record.isAiAccurate = isAgree;
     record.doctorNotes = dto.note ?? null;
-    record.doctorBrushPath = dto.heatmapImage ?? null;
+
+    if (dto.heatmapImage) {
+      if (typeof dto.heatmapImage !== 'string') {
+        throw new BadRequestException('Invalid heatmap format');
+      }
+      const base64 = dto.heatmapImage.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64, 'base64');
+
+      const isCloudinary = this.isCloudinary();
+
+      let maskUrl: string;
+
+      if (isCloudinary) {
+        const result = await this.cloudinary.uploadBuffer(buffer, {
+          folder: 'mask',
+          format: 'png',
+        });
+        maskUrl = result.secure_url;
+      } else {
+        const result = await this.localStorage.uploadBuffer(buffer, {
+          folder: 'mask',
+          format: 'png',
+        });
+        maskUrl = result.secure_url;
+      }
+
+      record.doctorBrushPath = maskUrl;
+    } else {
+      record.doctorBrushPath = null;
+    }
+
     record.validatorId = user.id;
     record.validatedAt = new Date();
     record.validationStatus = isAgree ? ValidationStatus.APPROVED : ValidationStatus.REJECTED;
@@ -202,10 +238,10 @@ export class MedicalRecordsService {
 
     const isCloudinary = this.isCloudinary();
 
-    const response = await axios.get(record.originalImagePath, {
+    const imageResponse = await axios.get<ArrayBuffer>(record.originalImagePath, {
       responseType: 'arraybuffer',
     });
-    const fileBuffer = Buffer.from(response.data);
+    const fileBuffer = Buffer.from(new Uint8Array(imageResponse.data));
 
     const formData = new FormData();
     formData.append('file', fileBuffer, 'reanalyze.png');
@@ -261,6 +297,9 @@ export class MedicalRecordsService {
     let gradcamUrl: string | null = null;
 
     if (aiResult.gradcam_base64) {
+      if (typeof aiResult.gradcam_base64 !== 'string') {
+        throw new BadRequestException('Invalid gradcam format');
+      }
       const buffer = Buffer.from(aiResult.gradcam_base64, 'base64');
 
       if (isCloudinary) {
