@@ -1,8 +1,11 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Cache } from 'cache-manager';
 
+import { ActivityLog } from '../activities/entities/activity-log.entity';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { AppException } from '../../common/exceptions/base.exception';
 import { generatePrefixedId } from '../../common/utils/id-generator.util';
@@ -29,6 +32,8 @@ export class UsersService {
   constructor(
     private readonly usersRepository: UsersRepository,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    @InjectRepository(ActivityLog)
+    private readonly activityLogRepo: Repository<ActivityLog>,
   ) {}
 
   /**
@@ -63,6 +68,15 @@ export class UsersService {
 
     // Invalidate list cache
     await this.invalidateListCache();
+
+    // Log activity
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: null, // System action or current user? For now null
+      actionType: (dto.role ?? UserRole.DOCTOR) === UserRole.DOCTOR ? 'ADD_DOCTOR' : 'ADD_ADMIN',
+      description: `Added new ${(dto.role ?? UserRole.DOCTOR).toLowerCase()}: ${dto.name}`,
+      timestamp: new Date(),
+    });
 
     this.logger.log({ action: 'CREATE_USER', userId: savedUser.id });
 

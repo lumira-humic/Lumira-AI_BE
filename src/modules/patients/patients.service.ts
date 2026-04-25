@@ -1,5 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+
+import { ActivityLog } from '../activities/entities/activity-log.entity';
 import {
   PatientRequestDto,
   PatientListResponseDto,
@@ -10,13 +14,18 @@ import {
 import { PatientsRepository } from './patients.repository';
 import { MedicalRecord } from '../medical-records';
 import { AppException, ErrorCode } from '../../common';
+import { generatePrefixedId } from '../../common/utils/id-generator.util';
 
 /**
  * Service layer for patient-related business logic.
  */
 @Injectable()
 export class PatientsService {
-  constructor(private readonly patientsRepository: PatientsRepository) {}
+  constructor(
+    private readonly patientsRepository: PatientsRepository,
+    @InjectRepository(ActivityLog)
+    private readonly activityLogRepo: Repository<ActivityLog>,
+  ) {}
 
   /**
    * Retrieve all patients with their latest medical record status.
@@ -67,6 +76,15 @@ export class PatientsService {
       password: hashedPassword, // Temporary
       phone: dto.phone ?? null,
       address: dto.address ?? null,
+    });
+
+    // Log activity
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: null, // Admin action
+      actionType: 'ADD_PATIENT',
+      description: `Added new patient: ${dto.name}`,
+      timestamp: new Date(),
     });
 
     return PatientDto.fromEntity(patient);
