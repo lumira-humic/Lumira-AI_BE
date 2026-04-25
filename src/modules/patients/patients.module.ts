@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { ActivityLog } from '../activities/entities/activity-log.entity';
 import { Patient } from './entities/patient.entity';
 import { PatientsRepository } from './patients.repository';
 import { PatientsService } from './patients.service';
@@ -13,7 +14,7 @@ import { PatientsController } from './patients.controller';
  * can look up patients during authentication.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Patient])],
+  imports: [TypeOrmModule.forFeature([Patient, ActivityLog])],
   controllers: [PatientsController],
   providers: [PatientsService, PatientsRepository],
   exports: [PatientsService, PatientsRepository],

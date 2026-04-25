@@ -11,5 +11,11 @@
       "src": "/(.*)",
       "dest": "api/index.ts"
     }
+  ],
+  "crons": [
+    {
+      "path": "/chat/cron/process-outbox",
+      "schedule": "0 0 * * *"
+    }
   ]
 }

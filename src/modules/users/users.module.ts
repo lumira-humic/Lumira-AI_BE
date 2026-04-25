@@ -8,6 +8,7 @@ import Redis from 'ioredis';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { UsersRepository } from './users.repository';
+import { ActivityLog } from '../activities/entities/activity-log.entity';
 import { User } from './entities/user.entity';
 
 const logger = new Logger('UsersModule:Redis');
@@ -15,7 +16,7 @@ const logger = new Logger('UsersModule:Redis');
 @Module({
   imports: [
     // Entity registration
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, ActivityLog]),
 
     // Redis cache for user list
     CacheModule.registerAsync({

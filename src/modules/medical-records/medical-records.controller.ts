@@ -91,8 +91,9 @@ export class MedicalRecordsController {
   async uploadMedicalRecord(
     @Body('patient_id') patientId: string,
     @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() actor: User,
   ): Promise<ApiResponseType<MedicalRecordDto>> {
-    const result = await this.medicalRecordsService.uploadAndAnalyze(patientId, file);
+    const result = await this.medicalRecordsService.uploadAndAnalyze(patientId, file, actor.id);
     return ResponseHelper.success(result, 'Upload successful and AI processing initiated');
   }
 
@@ -156,8 +157,9 @@ export class MedicalRecordsController {
   })
   async reanalyzePatient(
     @Param('id') patientId: string,
+    @CurrentUser() actor: User,
   ): Promise<ApiResponseType<MedicalRecordDto>> {
-    const result = await this.medicalRecordsService.reanalyzePatient(patientId);
+    const result = await this.medicalRecordsService.reanalyzePatient(patientId, actor.id);
     return ResponseHelper.success(result, 'Re-analysis successful');
   }
 }

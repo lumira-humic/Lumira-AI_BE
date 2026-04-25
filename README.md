@@ -35,6 +35,7 @@ Backend REST API untuk aplikasi Lumira AI, dibangun dengan **NestJS**, **TypeORM
 | Database | PostgreSQL |
 | Cache | Redis |
 | Auth | JWT (Access + Refresh Token) |
+| Realtime / Chat | Firebase Firestore + FCM |
 | Docs | Swagger / OpenAPI |
 | Validation | class-validator + Joi |
 
@@ -154,6 +155,12 @@ CLOUDINARY_UPLOAD_TIMEOUT_MS=60000
 # Optional and only used locally
 OBJECT_STORAGE_LOCAL_UPLOAD_DIR=uploads
 OBJECT_STORAGE_LOCAL_BASE_URL=/uploads
+
+# Firebase (Chat — Firestore & FCM)
+FIREBASE_ENABLED=true
+FIREBASE_PROJECT_ID=your_firebase_project_id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_KEY\n-----END PRIVATE KEY-----\n"
 ```
 
 > ⚠️ **Penting:** Jangan pernah commit file `.env.*` ke repository. File ini sudah di-ignore oleh `.gitignore`.
@@ -320,6 +327,47 @@ http://localhost:3000/api/docs
 | `MAIL_PORT` | ❌ | — | Port SMTP (opsional) |
 | `MAIL_USER` | ❌ | — | Username SMTP (opsional) |
 | `MAIL_PASSWORD` | ❌ | — | Password SMTP (opsional) |
+| `FIREBASE_ENABLED` | ✅ | `false` | Set `true` untuk mengaktifkan Firestore & FCM |
+| `FIREBASE_PROJECT_ID` | ✅ | — | Firebase project ID dari Service Account |
+| `FIREBASE_CLIENT_EMAIL` | ✅ | — | Client email dari Service Account JSON |
+| `FIREBASE_PRIVATE_KEY` | ✅ | — | Private key dari Service Account JSON |
+
+---
+
+## 💬 Chat (Firestore + FCM)
+
+Modul chat menyediakan komunikasi real-time antara **dokter dan pasien** yang terikat pada rekam medis tertentu.
+
+### Arsitektur
+
+- **PostgreSQL** sebagai _source of truth_ untuk semua pesan dan room.
+- **Firestore** sebagai _mirror_ real-time untuk konsumsi client mobile/web.
+- **FCM (Firebase Cloud Messaging)** untuk push notification ke perangkat penerima.
+- **Outbox Pattern**: setiap event (sync Firestore & kirim FCM) di-enqueue ke tabel `chat_outbox_events` di PostgreSQL terlebih dahulu, lalu diproses secara asinkron — menjamin konsistensi meski ada kegagalan sementara.
+
+### Endpoint Utama
+
+| Method | Path | Keterangan |
+|---|---|---|
+| `POST` | `/chat/rooms` | Buat atau resolve room berdasarkan medical record |
+| `GET` | `/chat/rooms` | Daftar room beserta summary (unread, last message, presence) |
+| `POST` | `/chat/rooms/:id/messages` | Kirim pesan baru |
+| `GET` | `/chat/rooms/:id/messages` | Ambil histori pesan (grouped by date, cursor pagination) |
+| `PUT` | `/chat/rooms/:id/read` | Tandai semua pesan sebagai sudah dibaca |
+| `POST` | `/chat/device-tokens` | Register/refresh FCM token device |
+| `POST` | `/chat/device-tokens/remove` | Nonaktifkan FCM token (logout/ganti device) |
+| `POST` | `/chat/heartbeat` | Update timestamp kehadiran (presence) |
+
+### Konfigurasi Firebase
+
+1. Buka [Firebase Console](https://console.firebase.google.com/) → Project Settings → **Service Accounts**
+2. Klik **Generate new private key** → download file JSON
+3. Salin nilai berikut ke `.env`:
+   - `FIREBASE_PROJECT_ID` ← `project_id`
+   - `FIREBASE_CLIENT_EMAIL` ← `client_email`
+   - `FIREBASE_PRIVATE_KEY` ← `private_key`
+4. Aktifkan **Firestore Database** dan **Cloud Messaging** di Firebase Console
+```
 
 ---
 

@@ -5,10 +5,12 @@ import { ResponseHelper } from '../../common/helpers/response.helper';
 import { ApiResponse as ApiResponseType } from '../../common/interfaces/api-response.interface';
 
 import { StatisticsService } from './statistics.service';
-import { ActivityLogDto, StatDetailDto, DoctorStatsDto } from './dto';
+import { ActivityLogDto, DoctorStatsDto, DashboardStatsDto } from './dto';
 import { RolesGuard } from '../../common/guards';
 import { Roles } from '../../common/decorators';
 import { UserRole } from '../users';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from '../users/entities/user.entity';
 
 /**
  * Controller for dashboard statistics and activity logs.
@@ -51,20 +53,23 @@ export class StatisticsController {
   })
   @ApiResponse({
     status: 200,
-    type: StatDetailDto,
-    isArray: true,
-    description: 'Admin top-level stats',
+    type: DashboardStatsDto,
+    description: 'Admin dashboard stats',
   })
-  getDashboardStats(): ApiResponseType<StatDetailDto[]> {
-    const result = this.statisticsService.getDashboardStats();
-    return ResponseHelper.success(result, 'Admin top-level stats');
+  async getDashboardStats(): Promise<ApiResponseType<DashboardStatsDto>> {
+    const result = await this.statisticsService.getDashboardStats();
+    return ResponseHelper.success(result, 'Admin dashboard stats');
   }
 
   /**
    * Get doctor-specific statistics.
+   *
+   * Admin can call this endpoint too (returns aggregate of all records
+   * where no validator is assigned yet, or pass-through totals).
+   * Doctor gets their own scoped KPIs.
    */
   @Get('stats/doctor')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
   @ApiOperation({
     summary: 'Get Doctor specific statistics',
     description: 'Retrieve KPIs for a specific doctor (doctor-specific view).',
@@ -74,8 +79,8 @@ export class StatisticsController {
     type: DoctorStatsDto,
     description: 'Doctor KPI stats',
   })
-  getDoctorStats(): ApiResponseType<DoctorStatsDto> {
-    const result = this.statisticsService.getDoctorStats();
+  async getDoctorStats(@CurrentUser() doctor: User): Promise<ApiResponseType<DoctorStatsDto>> {
+    const result = await this.statisticsService.getDoctorStats(doctor);
     return ResponseHelper.success(result, 'Doctor KPI stats');
   }
 }
