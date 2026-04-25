@@ -40,10 +40,11 @@ export class UsersService {
    * Create a new user account.
    *
    * @param dto - User details.
+   * @param actorId - The ID of the user performing the creation.
    * @returns Mapped response DTO.
    * @throws AppException if email is already registered.
    */
-  async create(dto: CreateUserDto): Promise<UserResponseDto> {
+  async create(dto: CreateUserDto, actorId: string): Promise<UserResponseDto> {
     const existing = await this.usersRepository.findByEmail(dto.email);
     if (existing) {
       throw new AppException(
@@ -72,7 +73,7 @@ export class UsersService {
     // Log activity
     await this.activityLogRepo.save({
       id: generatePrefixedId('ACT'),
-      userId: null, // System action or current user? For now null
+      userId: actorId,
       actionType: (dto.role ?? UserRole.DOCTOR) === UserRole.DOCTOR ? 'ADD_DOCTOR' : 'ADD_ADMIN',
       description: `Added new ${(dto.role ?? UserRole.DOCTOR).toLowerCase()}: ${dto.name}`,
       timestamp: new Date(),
@@ -212,6 +213,15 @@ export class UsersService {
     // Invalidate list cache
     await this.invalidateListCache();
 
+    // Log activity
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: actorId,
+      actionType: 'UPDATE_USER',
+      description: `Updated user profile: ${user.name} (${user.id})`,
+      timestamp: new Date(),
+    });
+
     this.logger.log({ action: 'UPDATE_USER', userId: id });
 
     return UserResponseDto.fromEntity(updatedUser);
@@ -221,9 +231,10 @@ export class UsersService {
    * Soft-delete a user account.
    *
    * @param id - User UUID.
+   * @param actorId - The ID of the user performing the deletion.
    * @throws AppException if user not found.
    */
-  async delete(id: string): Promise<void> {
+  async delete(id: string, actorId: string): Promise<void> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) {
       throw new AppException(ErrorCode.USER_NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND);
@@ -250,6 +261,15 @@ export class UsersService {
 
     // Invalidate list cache
     await this.invalidateListCache();
+
+    // Log activity
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: actorId,
+      actionType: 'DELETE_USER',
+      description: `Deleted user: ${user.name} (${user.id})`,
+      timestamp: new Date(),
+    });
 
     this.logger.log({ action: 'DELETE_USER', userId: id });
   }

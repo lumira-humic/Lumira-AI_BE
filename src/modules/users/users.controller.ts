@@ -58,8 +58,8 @@ export class UsersController {
   @ApiResponse({ status: 403, description: 'Forbidden — Admin only' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   @ApiResponse({ status: 422, description: 'Validation error' })
-  async create(@Body() createUserDto: CreateUserDto) {
-    const result = await this.usersService.create(createUserDto);
+  async create(@Body() createUserDto: CreateUserDto, @CurrentUser() actor: User) {
+    const result = await this.usersService.create(createUserDto, actor.id);
     return ResponseHelper.success(result, 'User created successfully', HttpStatus.CREATED);
   }
 
@@ -154,8 +154,8 @@ export class UsersController {
     status: 403,
     description: 'Forbidden - cannot delete the last active admin account',
   })
-  async remove(@Param('id') id: string) {
-    await this.usersService.delete(id);
+  async remove(@Param('id') id: string, @CurrentUser() actor: User) {
+    await this.usersService.delete(id, actor.id);
     return ResponseHelper.success(null, 'User deleted successfully');
   }
 }

@@ -95,7 +95,7 @@ describe('UsersService', () => {
       repository.save.mockResolvedValue(mockUser);
       mockCacheManager.store.keys.mockResolvedValue([]);
 
-      const result = await service.create(createDto);
+      const result = await service.create(createDto, 'admin-1');
 
       expect(repository.findByEmail).toHaveBeenCalledWith(createDto.email);
       expect(repository.save).toHaveBeenCalled();
@@ -105,7 +105,7 @@ describe('UsersService', () => {
     it('should throw 409 if email already exists', async () => {
       repository.findByEmail.mockResolvedValue(mockUser);
 
-      await expect(service.create(createDto)).rejects.toThrow(
+      await expect(service.create(createDto, 'admin-1')).rejects.toThrow(
         new AppException(
           ErrorCode.USER_ALREADY_EXISTS,
           'Email already registered',
@@ -276,7 +276,7 @@ describe('UsersService', () => {
       repository.count.mockResolvedValue(0);
       mockCacheManager.store.keys.mockResolvedValue(['users:list:1']);
 
-      await service.delete('uuid-1');
+      await service.delete('uuid-1', 'admin-1');
 
       expect(repository.softDelete).toHaveBeenCalledWith('uuid-1');
       expect(cacheManager.del).toHaveBeenCalledWith('users:list:1');
@@ -285,7 +285,7 @@ describe('UsersService', () => {
     it('should throw 404 if user not found', async () => {
       repository.findOne.mockResolvedValue(null);
 
-      await expect(service.delete('uuid-1')).rejects.toThrow(
+      await expect(service.delete('uuid-1', 'admin-1')).rejects.toThrow(
         new AppException(ErrorCode.USER_NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND),
       );
     });
@@ -299,7 +299,7 @@ describe('UsersService', () => {
       });
       repository.count.mockResolvedValue(1);
 
-      await expect(service.delete('admin-1')).rejects.toThrow(
+      await expect(service.delete('admin-1', 'admin-1')).rejects.toThrow(
         new AppException(
           ErrorCode.FORBIDDEN,
           'Cannot delete the last active admin account',
@@ -320,7 +320,7 @@ describe('UsersService', () => {
       repository.count.mockResolvedValue(2);
       mockCacheManager.store.keys.mockResolvedValue(['users:list:1']);
 
-      await service.delete('admin-1');
+      await service.delete('admin-1', 'admin-1');
 
       expect(repository.softDelete).toHaveBeenCalledWith('admin-1');
     });
