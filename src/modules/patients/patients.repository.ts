@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Patient } from './entities/patient.entity';
+import { generatePrefixedId } from '../../common/utils/id-generator.util';
 
 /**
  * Custom repository for the Patient entity.
@@ -30,7 +31,9 @@ export class PatientsRepository extends Repository<Patient> {
   async findAll(page: number, limit: number, search?: string): Promise<[Patient[], number]> {
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.repository.createQueryBuilder('patient');
+    const queryBuilder = this.repository
+      .createQueryBuilder('patient')
+      .leftJoinAndSelect('patient.medicalRecords', 'medicalRecords');
 
     if (search) {
       queryBuilder.andWhere('(patient.name ILIKE :search OR patient.email ILIKE :search)', {
@@ -38,7 +41,7 @@ export class PatientsRepository extends Repository<Patient> {
       });
     }
 
-    queryBuilder.skip(skip).take(limit).orderBy('patient.created_at', 'DESC');
+    queryBuilder.skip(skip).take(limit).orderBy('patient.createdAt', 'DESC');
 
     return queryBuilder.getManyAndCount();
   }
@@ -50,7 +53,10 @@ export class PatientsRepository extends Repository<Patient> {
    * @returns The newly created patient.
    */
   async createPatient(data: Partial<Patient>): Promise<Patient> {
-    const patient = this.repository.create(data);
+    const patient = this.repository.create({
+      ...data,
+      id: generatePrefixedId('PAS'),
+    });
     return this.repository.save(patient);
   }
 

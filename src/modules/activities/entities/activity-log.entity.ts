@@ -17,7 +17,7 @@ export class ActivityLog extends BaseEntity {
    *
    * Nullable for system-generated log entries that have no associated user.
    */
-  @Column({ name: 'user_id', type: 'uuid', nullable: true })
+  @Column({ name: 'user_id', type: 'varchar', length: 32, nullable: true })
   userId: string | null;
 
   /**

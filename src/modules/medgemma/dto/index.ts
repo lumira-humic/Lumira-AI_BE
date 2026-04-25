@@ -1,2 +1,7 @@
 export { MedGemmaConsultDto } from './medgemma-consult.dto';
-export { MedGemmaResponseDto } from './medgemma-response.dto';
+export {
+  MedGemmaResponseDto,
+  MedGemmaProfilingDto,
+  MedGemmaChatHistoryDto,
+  MedGemmaChatMessageDto,
+} from './medgemma-response.dto';
