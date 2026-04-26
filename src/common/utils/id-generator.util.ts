@@ -6,7 +6,7 @@
  * which is sufficient for this application scale.
  */
 
-export type IdPrefix = 'DOC' | 'ADM' | 'PAS' | 'MED';
+export type IdPrefix = 'DOC' | 'ADM' | 'PAS' | 'MED' | 'CHR' | 'CHM' | 'DVT' | 'COB' | 'ACT';
 
 export function generatePrefixedId(prefix: IdPrefix): string {
   const digits = Math.floor(Math.random() * 1_000_000)

@@ -9,10 +9,10 @@ import { MedGemmaSession } from './medgemma-session.entity';
 @Entity('medgemma_messages')
 @Index(['session_id', 'created_at'])
 export class MedGemmaMessage {
-  @PrimaryColumn('uuid')
+  @PrimaryColumn({ type: 'varchar', length: 36 })
   id!: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'varchar', length: 36 })
   session_id!: string;
 
   @Column({ type: 'varchar', length: 16 })

@@ -1,14 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import axios from 'axios';
+import FormData = require('form-data');
+
+import { ActivityLog } from '../activities/entities/activity-log.entity';
 import { MedicalRecordDto, SaveDoctorReviewDto } from './dto';
 import { User } from '../users';
 import { generatePrefixedId } from '../../common/utils/id-generator.util';
 import { ValidationStatus } from './enums';
 import { MedicalRecord } from './entities';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { Patient } from '../patients/entities';
-import axios from 'axios';
-import FormData = require('form-data');
 import { CloudinaryStorageService, LocalStorageService } from '../object-storage';
 
 /**
@@ -23,6 +25,9 @@ export class MedicalRecordsService {
     @InjectRepository(Patient)
     private readonly patientRepository: Repository<Patient>,
 
+    @InjectRepository(ActivityLog)
+    private readonly activityLogRepo: Repository<ActivityLog>,
+
     private readonly cloudinary: CloudinaryStorageService,
     private readonly localStorage: LocalStorageService,
   ) {}
@@ -30,7 +35,11 @@ export class MedicalRecordsService {
   /**
    * Upload a medical image and trigger AI analysis.
    */
-  async uploadAndAnalyze(patientId: string, file: Express.Multer.File): Promise<MedicalRecordDto> {
+  async uploadAndAnalyze(
+    patientId: string,
+    file: Express.Multer.File,
+    actorId: string,
+  ): Promise<MedicalRecordDto> {
     const patient = await this.patientRepository.findOne({
       where: { id: patientId },
     });
@@ -150,6 +159,15 @@ export class MedicalRecordsService {
 
     const saved = await this.medicalRecordRepository.save(record);
 
+    // Log activity
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: actorId,
+      actionType: 'UPLOAD_MEDICAL_RECORD',
+      description: `Uploaded medical record for patient ${patient.name}`,
+      timestamp: new Date(),
+    });
+
     return this.mapToDto(saved);
   }
 
@@ -210,13 +228,25 @@ export class MedicalRecordsService {
     record.doctorDiagnosis = isAgree ? record.aiDiagnosis : null;
 
     const updated = await this.medicalRecordRepository.save(record);
+
+    // Log activity
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: user.id,
+      actionType: 'VALIDATE_MEDICAL_RECORD',
+      description: `${isAgree ? 'Approved' : 'Rejected'} medical record for patient ${
+        record.patient?.name ?? record.patientId
+      }`,
+      timestamp: new Date(),
+    });
+
     return this.mapToDto(updated);
   }
 
   /**
    * Re-analyze the latest patient image.
    */
-  async reanalyzePatient(patientId: string): Promise<MedicalRecordDto> {
+  async reanalyzePatient(patientId: string, actorId: string): Promise<MedicalRecordDto> {
     const patient = await this.patientRepository.findOne({
       where: { id: patientId },
     });
@@ -327,6 +357,15 @@ export class MedicalRecordsService {
     record.validatedAt = null;
 
     const updated = await this.medicalRecordRepository.save(record);
+
+    // Log activity
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: actorId,
+      actionType: 'REANALYZE_MEDICAL_RECORD',
+      description: `Re-analyzed medical record for patient ${patient.name}`,
+      timestamp: new Date(),
+    });
 
     return this.mapToDto(updated);
   }

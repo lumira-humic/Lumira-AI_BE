@@ -1,5 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+
+import { ActivityLog } from '../activities/entities/activity-log.entity';
 import {
   PatientRequestDto,
   PatientListResponseDto,
@@ -10,13 +14,18 @@ import {
 import { PatientsRepository } from './patients.repository';
 import { MedicalRecord } from '../medical-records';
 import { AppException, ErrorCode } from '../../common';
+import { generatePrefixedId } from '../../common/utils/id-generator.util';
 
 /**
  * Service layer for patient-related business logic.
  */
 @Injectable()
 export class PatientsService {
-  constructor(private readonly patientsRepository: PatientsRepository) {}
+  constructor(
+    private readonly patientsRepository: PatientsRepository,
+    @InjectRepository(ActivityLog)
+    private readonly activityLogRepo: Repository<ActivityLog>,
+  ) {}
 
   /**
    * Retrieve all patients with their latest medical record status.
@@ -47,7 +56,7 @@ export class PatientsService {
   /**
    * Create a new patient.
    */
-  async createPatient(dto: PatientRequestDto): Promise<PatientDto> {
+  async createPatient(dto: PatientRequestDto, actorId: string): Promise<PatientDto> {
     const existingPatient = await this.patientsRepository.findOne({
       where: { email: dto.email },
     });
@@ -67,6 +76,15 @@ export class PatientsService {
       password: hashedPassword, // Temporary
       phone: dto.phone ?? null,
       address: dto.address ?? null,
+    });
+
+    // Log activity
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: actorId,
+      actionType: 'ADD_PATIENT',
+      description: `Added new patient: ${dto.name}`,
+      timestamp: new Date(),
     });
 
     return PatientDto.fromEntity(patient);
@@ -91,7 +109,7 @@ export class PatientsService {
   /**
    * Update patient information.
    */
-  async update(id: string, dto: PatientRequestDto): Promise<PatientDto> {
+  async update(id: string, dto: PatientRequestDto, actorId: string): Promise<PatientDto> {
     const patient = await this.patientsRepository.findById(id);
 
     if (!patient) {
@@ -112,13 +130,23 @@ export class PatientsService {
     patient.phone = dto.phone ?? null;
     patient.address = dto.address ?? null;
     const updated = await this.patientsRepository.save(patient);
+
+    // Log activity
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: actorId,
+      actionType: 'UPDATE_PATIENT',
+      description: `Updated patient info: ${patient.name} (${patient.id})`,
+      timestamp: new Date(),
+    });
+
     return PatientDto.fromEntity(updated);
   }
 
   /**
    * Soft-delete a patient.
    */
-  async delete(id: string): Promise<PatientDto> {
+  async delete(id: string, actorId: string): Promise<PatientDto> {
     const patient = await this.patientsRepository.findById(id);
 
     if (!patient) {
@@ -127,6 +155,16 @@ export class PatientsService {
 
     const dto = PatientDto.fromEntity(patient);
     await this.patientsRepository.softRemove(patient);
+
+    // Log activity
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: actorId,
+      actionType: 'DELETE_PATIENT',
+      description: `Deleted patient: ${patient.name} (${patient.id})`,
+      timestamp: new Date(),
+    });
+
     return dto;
   }
 }
