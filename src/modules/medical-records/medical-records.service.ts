@@ -62,13 +62,11 @@ export class MedicalRecordsService {
     if (isCloudinary) {
       const result = await this.cloudinary.uploadBuffer(file.buffer, {
         folder: 'raw',
-        format: 'png',
       });
       imageUrl = result.secure_url;
     } else {
       const result = await this.localStorage.uploadBuffer(file.buffer, {
         folder: 'raw',
-        format: 'png',
       });
       imageUrl = result.secure_url;
     }
