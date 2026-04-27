@@ -29,6 +29,8 @@ async function bootstrap() {
     }),
   );
   app.use(compression());
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
   // CORS Configuration
   const allowedOrigins = configService

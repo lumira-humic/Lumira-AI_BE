@@ -52,7 +52,7 @@ export class MedicalRecordsService {
     }
 
     if (!file.originalname.match(/\.(jpg|jpeg|png)$/i)) {
-      throw new BadRequestException('Invalid file extension');
+      throw new BadRequestException('Invalid file extension. Only JPEG, JPG and PNG are allowed');
     }
 
     const isCloudinary = this.isCloudinary();
@@ -196,6 +196,16 @@ export class MedicalRecordsService {
       if (typeof dto.heatmapImage !== 'string') {
         throw new BadRequestException('Invalid heatmap format');
       }
+
+      const validPrefixes = [
+        'data:image/jpeg;base64,',
+        'data:image/jpg;base64,',
+        'data:image/png;base64,',
+      ];
+      if (!validPrefixes.some((prefix) => dto.heatmapImage!.startsWith(prefix))) {
+        throw new BadRequestException('Invalid heatmap format. Only JPEG, JPG and PNG are allowed');
+      }
+
       const base64 = dto.heatmapImage.replace(/^data:image\/\w+;base64,/, '');
       const buffer = Buffer.from(base64, 'base64');
 
@@ -206,13 +216,11 @@ export class MedicalRecordsService {
       if (isCloudinary) {
         const result = await this.cloudinary.uploadBuffer(buffer, {
           folder: 'mask',
-          format: 'png',
         });
         maskUrl = result.secure_url;
       } else {
         const result = await this.localStorage.uploadBuffer(buffer, {
           folder: 'mask',
-          format: 'png',
         });
         maskUrl = result.secure_url;
       }
