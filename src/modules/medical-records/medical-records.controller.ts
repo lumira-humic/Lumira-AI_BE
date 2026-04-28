@@ -103,6 +103,21 @@ export class MedicalRecordsController {
   @Post('medical-records/:id/review')
   @Roles(UserRole.DOCTOR)
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('heatmapImage', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+          return cb(
+            new BadRequestException('Invalid heatmap format. Only JPEG, JPG and PNG are allowed'),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Submit Doctor Review for an AI diagnosis',
     description: 'Doctor validates AI analysis and submits their diagnosis.',
@@ -112,7 +127,28 @@ export class MedicalRecordsController {
     type: 'string',
     description: 'Medical Record UUID',
   })
-  @ApiBody({ type: SaveDoctorReviewDto })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['agreement'],
+      properties: {
+        agreement: {
+          type: 'string',
+          enum: ['agree', 'disagree'],
+          example: 'agree',
+        },
+        note: {
+          type: 'string',
+          example: 'Confirmed benign nodule, recommend follow-up in 6 months',
+        },
+        heatmapImage: {
+          type: 'string',
+          format: 'binary',
+          description: "Doctor's heatmap mask image (JPG/JPEG/PNG)",
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 200,
     type: MedicalRecordDto,
@@ -125,9 +161,15 @@ export class MedicalRecordsController {
   async saveDoctorReview(
     @Param('id') id: string,
     @Body() dto: SaveDoctorReviewDto,
+    @UploadedFile() heatmapImageFile: Express.Multer.File | undefined,
     @CurrentUser() user: User,
   ): Promise<ApiResponseType<MedicalRecordDto>> {
-    const result = await this.medicalRecordsService.submitDoctorReview(id, dto, user);
+    const result = await this.medicalRecordsService.submitDoctorReview(
+      id,
+      dto,
+      user,
+      heatmapImageFile,
+    );
     return ResponseHelper.success(result, 'Review successfully saved');
   }
 
