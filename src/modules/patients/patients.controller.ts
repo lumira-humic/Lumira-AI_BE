@@ -11,7 +11,11 @@ import {
   UseGuards,
   Query,
   ForbiddenException,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -19,6 +23,7 @@ import {
   ApiParam,
   ApiBody,
   ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
 
 import { ResponseHelper } from '../../common/helpers/response.helper';
@@ -86,11 +91,40 @@ export class PatientsController {
   @ApiBearerAuth('BearerAuth')
   @HttpCode(HttpStatus.CREATED)
   @Roles(UserRole.ADMIN)
+  @UseInterceptors(
+    FileInterceptor('medicalRecordImage', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+          return cb(new BadRequestException('Only JPG/JPEG/PNG allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Add a new patient',
     description: 'Create a new patient record in the system.',
   })
-  @ApiBody({ type: PatientRequestDto })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['name', 'email', 'password'],
+      properties: {
+        name: { type: 'string', example: 'Budi Santoso' },
+        email: { type: 'string', example: 'budi@mail.com' },
+        password: { type: 'string', example: 'S3cur3P@ss' },
+        phone: { type: 'string', example: '+6281234567890' },
+        address: { type: 'string', example: 'Jl. Merdeka No. 10, Jakarta' },
+        medicalRecordImage: {
+          type: 'string',
+          format: 'binary',
+          description: 'Optional initial medical record image (JPG/JPEG/PNG)',
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 201,
     type: PatientDto,
@@ -102,9 +136,10 @@ export class PatientsController {
   })
   async addPatient(
     @Body() dto: PatientRequestDto,
+    @UploadedFile() medicalRecordImage: Express.Multer.File | undefined,
     @CurrentUser() user: User,
   ): Promise<ApiResponseType<PatientDto>> {
-    const result = await this.patientsService.createPatient(dto, user.id);
+    const result = await this.patientsService.createPatient(dto, user.id, medicalRecordImage);
     return ResponseHelper.success<PatientDto>(result, 'Created', HttpStatus.CREATED);
   }
 

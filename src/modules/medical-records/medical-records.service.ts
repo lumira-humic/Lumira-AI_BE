@@ -183,6 +183,7 @@ export class MedicalRecordsService {
     id: string,
     dto: SaveDoctorReviewDto,
     user: User,
+    heatmapImageFile?: Express.Multer.File,
   ): Promise<MedicalRecordDto> {
     const record = await this.medicalRecordRepository.findOne({
       where: { id },
@@ -199,8 +200,12 @@ export class MedicalRecordsService {
     record.agreement = dto.agreement;
     record.note = dto.note ?? null;
 
-    if (dto.heatmapImage) {
-      const buffer = await this.resolveHeatmapImageBuffer(dto.heatmapImage);
+    if (heatmapImageFile) {
+      if (!heatmapImageFile.originalname.match(/\.(jpg|jpeg|png)$/i)) {
+        throw new BadRequestException('Invalid heatmap format. Only JPEG, JPG and PNG are allowed');
+      }
+
+      const buffer = heatmapImageFile.buffer;
 
       const isCloudinary = this.isCloudinary();
 
@@ -398,88 +403,6 @@ export class MedicalRecordsService {
       uploaded_at: record.uploadedAt.toISOString(),
       validated_at: record.validatedAt ? record.validatedAt.toISOString() : null,
     };
-  }
-
-  private async resolveHeatmapImageBuffer(heatmapImage: string): Promise<Buffer> {
-    if (typeof heatmapImage !== 'string') {
-      throw new BadRequestException('Invalid heatmap format');
-    }
-
-    const value = heatmapImage.trim();
-    if (!value) {
-      throw new BadRequestException('Invalid heatmap format');
-    }
-
-    if (/^https?:\/\//i.test(value)) {
-      return this.downloadHeatmapImage(value);
-    }
-
-    const dataUrlMatch = value.match(/^data:image\/(png|jpe?g);base64,([\s\S]+)$/i);
-    if (dataUrlMatch) {
-      const buffer = Buffer.from(dataUrlMatch[2].replace(/\s/g, ''), 'base64');
-      this.assertSupportedHeatmapBuffer(buffer);
-      return buffer;
-    }
-
-    const buffer = Buffer.from(value.replace(/\s/g, ''), 'base64');
-    this.assertSupportedHeatmapBuffer(buffer);
-    return buffer;
-  }
-
-  private async downloadHeatmapImage(url: string): Promise<Buffer> {
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      throw new BadRequestException('Invalid heatmap URL');
-    }
-
-    if (!this.hasSupportedImageExtension(parsedUrl.pathname)) {
-      throw new BadRequestException('Invalid heatmap format. Only JPEG, JPG and PNG are allowed');
-    }
-
-    try {
-      const response = await axios.get<ArrayBuffer>(url, {
-        responseType: 'arraybuffer',
-      });
-      const buffer = Buffer.from(new Uint8Array(response.data));
-      this.assertSupportedHeatmapBuffer(buffer);
-      return buffer;
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-
-      throw new BadRequestException('Unable to download heatmap image');
-    }
-  }
-
-  private hasSupportedImageExtension(pathname: string): boolean {
-    return /\.(png|jpe?g)$/i.test(pathname);
-  }
-
-  private assertSupportedHeatmapBuffer(buffer: Buffer): void {
-    if (!this.isPngBuffer(buffer) && !this.isJpegBuffer(buffer)) {
-      throw new BadRequestException('Invalid heatmap format. Only JPEG, JPG and PNG are allowed');
-    }
-  }
-
-  private isPngBuffer(buffer: Buffer): boolean {
-    return (
-      buffer.length >= 8 &&
-      buffer[0] === 0x89 &&
-      buffer[1] === 0x50 &&
-      buffer[2] === 0x4e &&
-      buffer[3] === 0x47 &&
-      buffer[4] === 0x0d &&
-      buffer[5] === 0x0a &&
-      buffer[6] === 0x1a &&
-      buffer[7] === 0x0a
-    );
-  }
-
-  private isJpegBuffer(buffer: Buffer): boolean {
-    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
   }
 
   private isCloudinary(): boolean {

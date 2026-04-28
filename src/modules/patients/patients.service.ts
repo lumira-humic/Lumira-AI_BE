@@ -13,6 +13,7 @@ import {
 } from './dto';
 import { PatientsRepository } from './patients.repository';
 import { MedicalRecord } from '../medical-records';
+import { MedicalRecordsService } from '../medical-records/medical-records.service';
 import { AppException, ErrorCode } from '../../common';
 import { generatePrefixedId } from '../../common/utils/id-generator.util';
 
@@ -25,6 +26,7 @@ export class PatientsService {
     private readonly patientsRepository: PatientsRepository,
     @InjectRepository(ActivityLog)
     private readonly activityLogRepo: Repository<ActivityLog>,
+    private readonly medicalRecordsService: MedicalRecordsService,
   ) {}
 
   /**
@@ -56,7 +58,11 @@ export class PatientsService {
   /**
    * Create a new patient.
    */
-  async createPatient(dto: PatientRequestDto, actorId: string): Promise<PatientDto> {
+  async createPatient(
+    dto: PatientRequestDto,
+    actorId: string,
+    medicalRecordImage?: Express.Multer.File,
+  ): Promise<PatientDto> {
     const existingPatient = await this.patientsRepository.findOne({
       where: { email: dto.email },
     });
@@ -77,6 +83,9 @@ export class PatientsService {
       phone: dto.phone ?? null,
       address: dto.address ?? null,
     });
+    if (medicalRecordImage) {
+      await this.medicalRecordsService.uploadAndAnalyze(patient.id, medicalRecordImage, actorId);
+    }
 
     // Log activity
     await this.activityLogRepo.save({
