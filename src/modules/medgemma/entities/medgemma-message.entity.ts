@@ -1,4 +1,4 @@
-import { Column, Entity, Index, ManyToOne, PrimaryColumn } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
 import { MedGemmaSession } from './medgemma-session.entity';
 
 /**
@@ -33,5 +33,6 @@ export class MedGemmaMessage {
   @ManyToOne(() => MedGemmaSession, (session) => session.messages, {
     onDelete: 'CASCADE',
   })
+  @JoinColumn({ name: 'session_id' })
   session!: MedGemmaSession;
 }

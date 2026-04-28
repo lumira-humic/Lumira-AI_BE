@@ -22,12 +22,4 @@ export class SaveDoctorReviewDto {
   @IsOptional()
   @IsString()
   note?: string;
-
-  @ApiPropertyOptional({
-    description: "Data URL for the doctor's brushed/drawn heatmap mask",
-    example: 'data:image/png;base64,iVBORw0KGgoAAAANSU...',
-  })
-  @IsOptional()
-  @IsString()
-  heatmapImage?: string;
 }

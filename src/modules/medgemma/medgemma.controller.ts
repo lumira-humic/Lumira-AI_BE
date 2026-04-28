@@ -5,20 +5,17 @@ import {
   Post,
   Body,
   Req,
-  UseInterceptors,
-  UploadedFile,
   HttpStatus,
   HttpCode,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBody,
-  ApiConsumes,
   ApiParam,
 } from '@nestjs/swagger';
 
@@ -52,18 +49,16 @@ export class MedGemmaController {
    */
   @Post('consultation')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('image'))
-  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Consult with MedGemma AI Chatbot',
     description:
       'Endpoint for both Doctor (second opinion, image analysis) and Patient (health education, pre-consultation). ' +
-      'Supports multimodal input (text + medical image).',
+      'Follows MedGemma V2 provider contract: application/json with user_prompt, optional chat history from session, and optional image URL.',
   })
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['prompt', 'role'],
+      required: ['user_prompt', 'role'],
       properties: {
         session_id: {
           type: 'string',
@@ -71,10 +66,10 @@ export class MedGemmaController {
             'Optional conversation session id. If omitted, server creates a new session id.',
           example: '90e73057-9959-4acd-a80e-26f1780f81f5',
         },
-        prompt: {
+        user_prompt: {
           type: 'string',
-          description: 'User question or prompt for the AI',
-          example: 'What are the signs of malignancy?',
+          description: 'Teks pertanyaan atau keluhan medis dari pengguna',
+          example: 'Muncul saat saya berolahraga, Dok.',
         },
         role: {
           type: 'string',
@@ -83,8 +78,9 @@ export class MedGemmaController {
         },
         image: {
           type: 'string',
-          format: 'binary',
-          description: 'Optional medical image for analysis',
+          format: 'uri',
+          description: 'Optional medical image URL for analysis (JPEG, PNG, WEBP)',
+          example: 'https://storage.example.com/medical-images/rontgen-paru-123.jpg',
         },
       },
     },
@@ -97,7 +93,6 @@ export class MedGemmaController {
   async consult(
     @Req() req: AuthenticatedRequest,
     @Body() dto: MedGemmaConsultDto,
-    @UploadedFile() image?: unknown,
   ): Promise<ApiResponseType<MedGemmaResponseDto>> {
     const resolvedRole = this.resolveRole(req.user);
 
@@ -105,7 +100,11 @@ export class MedGemmaController {
       throw new ForbiddenException('Role context must match authenticated actor role');
     }
 
-    const result = await this.medgemmaService.consult(dto, resolvedRole, image);
+    if (!dto.user_prompt?.trim() && !dto.prompt?.trim()) {
+      throw new BadRequestException("Field 'user_prompt' wajib diisi.");
+    }
+
+    const result = await this.medgemmaService.consult(dto, resolvedRole);
     return ResponseHelper.success(result, 'MedGemma AI response');
   }
 
@@ -113,7 +112,7 @@ export class MedGemmaController {
   @ApiOperation({
     summary: 'Get latest MedGemma chat history by session',
     description:
-      'Returns latest 10 chat messages for a single MedGemma session. Sessions are isolated (stateless across sessions).',
+      'Returns latest 10 chat messages for a single MedGemma session. History is used as provider chat_history context on the next consultation.',
   })
   @ApiParam({
     name: 'session_id',
@@ -161,7 +160,7 @@ export class MedGemmaController {
     this.resolveRole(req.user);
 
     return ResponseHelper.success(
-      await this.medgemmaService.getChatHistory(sessionId),
+      await this.medgemmaService.getChatHistory(sessionId, this.resolveRole(req.user)),
       'MedGemma chat history',
     );
   }
