@@ -74,6 +74,28 @@ export class MedicalRecordDto {
   })
   doctor_brush_path!: string | null;
 
+  @ApiPropertyOptional({
+    example: 'agree',
+    enum: ['agree', 'disagree'],
+    nullable: true,
+    description: 'Doctor agreement with the AI diagnosis',
+  })
+  agreement!: 'agree' | 'disagree' | null;
+
+  @ApiPropertyOptional({
+    example: 'Urgent consultation recommended',
+    nullable: true,
+    description: 'Doctor notes alias from review request',
+  })
+  note!: string | null;
+
+  @ApiPropertyOptional({
+    example: 'https://api.lumira.ai/uploads/brush_123.png',
+    nullable: true,
+    description: 'Saved heatmap image URL alias from review request',
+  })
+  heatmapImage!: string | null;
+
   @ApiProperty({
     example: '2025-04-07T10:30:00Z',
     description: 'Upload timestamp',
@@ -99,6 +121,10 @@ export class MedicalRecordDto {
     dto.doctor_diagnosis = entity.doctorDiagnosis;
     dto.doctor_notes = entity.doctorNotes;
     dto.doctor_brush_path = entity.doctorBrushPath;
+    dto.agreement =
+      entity.isAiAccurate === null ? null : entity.isAiAccurate ? 'agree' : 'disagree';
+    dto.note = entity.doctorNotes;
+    dto.heatmapImage = entity.doctorBrushPath;
     dto.uploaded_at = entity.uploadedAt.toISOString();
     dto.validated_at = entity.validatedAt?.toISOString() || null;
     return dto;

@@ -153,6 +153,9 @@ export class MedicalRecordsService {
       doctorDiagnosis: null,
       doctorNotes: null,
       doctorBrushPath: null,
+      agreement: null,
+      note: null,
+      heatmapImage: null,
       isAiAccurate: null,
       validatedAt: null,
     });
@@ -178,6 +181,7 @@ export class MedicalRecordsService {
     id: string,
     dto: SaveDoctorReviewDto,
     user: User,
+    heatmapImageFile?: Express.Multer.File,
   ): Promise<MedicalRecordDto> {
     const record = await this.medicalRecordRepository.findOne({
       where: { id },
@@ -191,23 +195,14 @@ export class MedicalRecordsService {
 
     record.isAiAccurate = isAgree;
     record.doctorNotes = dto.note ?? null;
+    record.agreement = dto.agreement;
+    record.note = dto.note ?? null;
 
-    if (dto.heatmapImage) {
-      if (typeof dto.heatmapImage !== 'string') {
-        throw new BadRequestException('Invalid heatmap format');
-      }
-
-      const validPrefixes = [
-        'data:image/jpeg;base64,',
-        'data:image/jpg;base64,',
-        'data:image/png;base64,',
-      ];
-      if (!validPrefixes.some((prefix) => dto.heatmapImage!.startsWith(prefix))) {
+    if (heatmapImageFile) {
+      if (!heatmapImageFile.originalname.match(/\.(jpg|jpeg|png)$/i)) {
         throw new BadRequestException('Invalid heatmap format. Only JPEG, JPG and PNG are allowed');
       }
-
-      const base64 = dto.heatmapImage.replace(/^data:image\/\w+;base64,/, '');
-      const buffer = Buffer.from(base64, 'base64');
+      const buffer = heatmapImageFile.buffer;
 
       const isCloudinary = this.isCloudinary();
 
@@ -226,8 +221,10 @@ export class MedicalRecordsService {
       }
 
       record.doctorBrushPath = maskUrl;
+      record.heatmapImage = maskUrl;
     } else {
       record.doctorBrushPath = null;
+      record.heatmapImage = null;
     }
 
     record.validatorId = user.id;
@@ -361,6 +358,9 @@ export class MedicalRecordsService {
     record.doctorDiagnosis = null;
     record.doctorNotes = null;
     record.doctorBrushPath = null;
+    record.agreement = null;
+    record.note = null;
+    record.heatmapImage = null;
     record.isAiAccurate = null;
     record.validatedAt = null;
 
@@ -390,6 +390,11 @@ export class MedicalRecordsService {
       doctor_diagnosis: record.doctorDiagnosis,
       doctor_notes: record.doctorNotes,
       doctor_brush_path: record.doctorBrushPath,
+      agreement:
+        record.agreement ??
+        (record.isAiAccurate === null ? null : record.isAiAccurate ? 'agree' : 'disagree'),
+      note: record.note ?? record.doctorNotes,
+      heatmapImage: record.heatmapImage ?? record.doctorBrushPath,
       uploaded_at: record.uploadedAt.toISOString(),
       validated_at: record.validatedAt ? record.validatedAt.toISOString() : null,
     };
