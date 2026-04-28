@@ -72,6 +72,18 @@ export class MedicalRecord extends BaseEntity {
   @Column({ name: 'doctor_brush_path', type: 'varchar', nullable: true })
   doctorBrushPath!: string | null;
 
+  /** Raw agreement value submitted by client (`agree` or `disagree`). */
+  @Column({ name: 'agreement', type: 'varchar', nullable: true })
+  agreement!: 'agree' | 'disagree' | null;
+
+  /** Raw note value submitted by client. */
+  @Column({ name: 'note', type: 'varchar', nullable: true })
+  note!: string | null;
+
+  /** Raw heatmap image value saved as a resolved URL. */
+  @Column({ name: 'heatmap_image', type: 'varchar', nullable: true })
+  heatmapImage!: string | null;
+
   /**
    * Whether the doctor agrees with the AI diagnosis.
    *

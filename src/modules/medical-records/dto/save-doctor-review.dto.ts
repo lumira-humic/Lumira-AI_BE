@@ -24,8 +24,9 @@ export class SaveDoctorReviewDto {
   note?: string;
 
   @ApiPropertyOptional({
-    description: "Data URL for the doctor's brushed/drawn heatmap mask",
-    example: 'data:image/png;base64,iVBORw0KGgoAAAANSU...',
+    description:
+      "Data URL, raw base64, or HTTP(S) URL for the doctor's brushed/drawn heatmap mask. Supported image formats: JPEG, JPG, PNG.",
+    example: 'https://res.cloudinary.com/demo/image/upload/v1234567890/mask.png',
   })
   @IsOptional()
   @IsString()
