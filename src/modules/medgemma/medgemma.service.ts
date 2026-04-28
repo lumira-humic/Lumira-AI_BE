@@ -22,13 +22,14 @@ const HISTORY_WINDOW_SIZE = 10;
 const DEFAULT_PROVIDER_TIMEOUT_MS = 30000;
 
 type ProviderMessage = {
-  role: 'system' | 'user' | 'assistant';
+  role: 'user' | 'model';
   content: string;
 };
 
 type ProviderRequestBody = {
-  model: string;
-  messages: ProviderMessage[];
+  user: 'Doctor' | 'Patient';
+  user_prompt: string;
+  chat_history?: ProviderMessage[];
   image?: string;
 };
 
@@ -56,31 +57,25 @@ export class MedGemmaService {
   /**
    * Process user query through MedGemma AI.
    */
-  async consult(
-    dto: MedGemmaConsultDto,
-    role: MedGemmaRole,
-    _image?: unknown,
-  ): Promise<MedGemmaResponseDto> {
+  async consult(dto: MedGemmaConsultDto, role: MedGemmaRole): Promise<MedGemmaResponseDto> {
     const sessionId =
       typeof dto.session_id === 'string' && dto.session_id.trim().length > 0
         ? dto.session_id
         : randomUUID();
+    const userPrompt = this.resolveUserPrompt(dto);
 
-    // Upsert the session row
     await this.upsertSession(sessionId, role);
 
-    // Fetch last N messages for context window
     const history = await this.getRecentMessages(sessionId, HISTORY_WINDOW_SIZE);
 
     const aiResult: { response: string; profiling: ProfilingMetrics } = await this.requestProvider(
-      dto.prompt,
+      userPrompt,
       role,
       sessionId,
       history,
       dto.image,
     );
 
-    // Persist the new user + assistant messages
     const now = new Date();
     await this.messageRepo.save([
       this.messageRepo.create({
@@ -88,7 +83,7 @@ export class MedGemmaService {
         session_id: sessionId,
         sender: 'user',
         role,
-        message: dto.prompt,
+        message: userPrompt,
         created_at: now,
       }),
       this.messageRepo.create({
@@ -113,7 +108,8 @@ export class MedGemmaService {
     };
   }
 
-  async getChatHistory(sessionId: string): Promise<MedGemmaChatHistoryDto> {
+  async getChatHistory(sessionId: string, role: MedGemmaRole): Promise<MedGemmaChatHistoryDto> {
+    await this.assertSessionRole(sessionId, role);
     const messages = await this.getRecentMessages(sessionId, HISTORY_WINDOW_SIZE);
 
     return {
@@ -130,15 +126,29 @@ export class MedGemmaService {
     const existing = await this.sessionRepo.findOne({ where: { id: sessionId } });
     if (!existing) {
       await this.sessionRepo.save(this.sessionRepo.create({ id: sessionId, role }));
+      return;
     }
+
+    if (existing.role !== role) {
+      throw new AppException(
+        ErrorCode.FORBIDDEN,
+        'Session role does not match authenticated actor role',
+        403,
+      );
+    }
+
+    existing.updated_at = new Date();
+    await this.sessionRepo.save(existing);
   }
 
   private async getRecentMessages(sessionId: string, limit: number): Promise<MedGemmaMessage[]> {
-    return this.messageRepo.find({
+    const messages = await this.messageRepo.find({
       where: { session_id: sessionId },
-      order: { created_at: 'ASC' },
+      order: { created_at: 'DESC' },
       take: limit,
     });
+
+    return messages.reverse();
   }
 
   private toChatMessageDto(message: MedGemmaMessage): MedGemmaChatMessageDto {
@@ -160,44 +170,45 @@ export class MedGemmaService {
   ): Promise<{ response: string; profiling: ProfilingMetrics }> {
     const baseUrl = this.configService.get<string>('medgemma.providerBaseUrl', '');
     const apiKey = this.configService.get<string>('medgemma.providerApiKey', '');
-    const model = this.configService.get<string>('medgemma.providerModel', 'medgemma');
     const timeoutMs = this.configService.get<number>(
       'medgemma.providerTimeoutMs',
       DEFAULT_PROVIDER_TIMEOUT_MS,
     );
 
-    if (!baseUrl || !apiKey) {
+    if (!baseUrl) {
       throw new AppException(
         ErrorCode.INTERNAL_SERVER_ERROR,
-        'MedGemma provider is not configured. Set MEDGEMMA_PROVIDER_BASE_URL and MEDGEMMA_PROVIDER_API_KEY',
+        'MedGemma provider is not configured. Set MEDGEMMA_PROVIDER_BASE_URL',
         503,
       );
     }
 
-    const systemPrompt = this.buildSystemPrompt(role);
     const historyMessages: ProviderMessage[] = history.map((m) => ({
-      role: m.sender === 'assistant' ? 'assistant' : 'user',
+      role: m.sender === 'assistant' ? 'model' : 'user',
       content: m.message,
     }));
 
     const body: ProviderRequestBody = {
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...historyMessages,
-        { role: 'user', content: prompt },
-      ],
+      user: this.toProviderUser(role),
+      user_prompt: prompt,
+      ...(historyMessages.length > 0 ? { chat_history: historyMessages } : {}),
       ...(image ? { image } : {}),
     };
+
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-Session-Id': sessionId,
+    };
+
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
 
     const startedAt = Date.now();
     const response = await fetch(baseUrl, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'X-Session-Id': sessionId,
-      },
+      headers,
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -223,32 +234,40 @@ export class MedGemmaService {
       );
     }
 
-    const tokensGenerated = this.extractGeneratedTokens(data, output);
+    const profiling = this.extractProfiling(data, output, latencySeconds);
 
     return {
       response: output,
-      profiling: {
-        latency_seconds: latencySeconds,
-        tokens_generated: tokensGenerated,
-        tokens_per_second: this.toPrecision(tokensGenerated / Math.max(latencySeconds, 0.001), 2),
-      },
+      profiling,
     };
   }
 
-  private buildSystemPrompt(role: MedGemmaRole): string {
-    if (role === 'doctor') {
-      return [
-        'You are MedGemma clinical assistant for licensed doctors.',
-        'Respond with technical medical language, differential diagnosis framing, and concise clinical reasoning.',
-        'Do not claim certainty and include caution for clinical validation when needed.',
-      ].join(' ');
+  private resolveUserPrompt(dto: MedGemmaConsultDto): string {
+    const prompt = dto.user_prompt?.trim() || dto.prompt?.trim();
+
+    if (!prompt) {
+      throw new AppException(ErrorCode.VALIDATION_ERROR, "Field 'user_prompt' wajib diisi.", 400);
     }
 
-    return [
-      'You are MedGemma patient-facing assistant.',
-      'Use consultative and empathetic language in Indonesian, easy to understand by patients.',
-      'Do not replace doctors; highlight warning signs requiring direct medical attention.',
-    ].join(' ');
+    return prompt;
+  }
+
+  private toProviderUser(role: MedGemmaRole): 'Doctor' | 'Patient' {
+    return role === 'doctor' ? 'Doctor' : 'Patient';
+  }
+
+  private async assertSessionRole(sessionId: string, role: MedGemmaRole): Promise<void> {
+    const session = await this.sessionRepo.findOne({ where: { id: sessionId } });
+
+    if (!session) return;
+
+    if (session.role !== role) {
+      throw new AppException(
+        ErrorCode.FORBIDDEN,
+        'Session role does not match authenticated actor role',
+        403,
+      );
+    }
   }
 
   private extractResponseText(payload: unknown): string {
@@ -258,6 +277,10 @@ export class MedGemmaService {
       return data.response;
     }
 
+    if (typeof data.consultation_result === 'string') {
+      return data.consultation_result;
+    }
+
     if (typeof data.output_text === 'string') {
       return data.output_text;
     }
@@ -265,6 +288,10 @@ export class MedGemmaService {
     const nestedData = data.data as Record<string, unknown> | undefined;
     if (nestedData && typeof nestedData.response === 'string') {
       return nestedData.response;
+    }
+
+    if (nestedData && typeof nestedData.consultation_result === 'string') {
+      return nestedData.consultation_result;
     }
 
     const choices = data.choices as Array<Record<string, unknown>> | undefined;
@@ -286,6 +313,33 @@ export class MedGemmaService {
     }
 
     return '';
+  }
+
+  private extractProfiling(
+    payload: unknown,
+    output: string,
+    measuredLatencySeconds: number,
+  ): ProfilingMetrics {
+    const data = payload as Record<string, unknown>;
+    const nestedData = data.data as Record<string, unknown> | undefined;
+    const profiling =
+      (nestedData?.profiling as Record<string, unknown> | undefined) ??
+      (data.profiling as Record<string, unknown> | undefined);
+
+    const latencySeconds =
+      this.toPositiveNumber(profiling?.latency_seconds) ?? measuredLatencySeconds;
+    const tokensGenerated =
+      this.toNonNegativeInteger(profiling?.tokens_generated) ??
+      this.extractGeneratedTokens(payload, output);
+    const tokensPerSecond =
+      this.toPositiveNumber(profiling?.tokens_per_second) ??
+      this.toPrecision(tokensGenerated / Math.max(latencySeconds, 0.001), 2);
+
+    return {
+      latency_seconds: latencySeconds,
+      tokens_generated: tokensGenerated,
+      tokens_per_second: tokensPerSecond,
+    };
   }
 
   private extractGeneratedTokens(payload: unknown, output: string): number {
@@ -315,6 +369,11 @@ export class MedGemmaService {
     if (typeof value !== 'number' || !Number.isFinite(value)) return null;
     const rounded = Math.floor(value);
     return rounded >= 0 ? rounded : null;
+  }
+
+  private toPositiveNumber(value: unknown): number | null {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
+    return Number(value);
   }
 
   private toPrecision(value: number, fractionDigits: number): number {
