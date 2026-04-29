@@ -38,6 +38,13 @@ export class MedGemmaResponseDto {
   role!: 'doctor' | 'patient';
 
   @ApiProperty({
+    description: 'Conversation title auto-generated from AI response',
+    example: 'Kemungkinan utama adalah angina stabil, namun perlu skrining red flags kardiak',
+    nullable: true,
+  })
+  title!: string | null;
+
+  @ApiProperty({
     description: 'AI-generated response text',
     example:
       'Based on the clinical evidence, malignant tumors typically show: irregular borders, heterogeneous echogenicity, hypoechoic structure, increased vascularity on Doppler...',
@@ -107,6 +114,13 @@ export class MedGemmaSessionConversationDto {
     example: 'patient',
   })
   role!: 'doctor' | 'patient';
+
+  @ApiProperty({
+    description: 'Conversation title used to identify this session',
+    example: 'Gerd akan kambuh kalo minum kopi',
+    nullable: true,
+  })
+  title!: string | null;
 
   @ApiProperty({
     example: '2026-04-23T12:00:00.000Z',

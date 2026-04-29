@@ -6,6 +6,7 @@ import { MedGemmaSession } from '../../modules/medgemma/entities/medgemma-sessio
 type SeedSession = {
   id: string;
   role: 'doctor' | 'patient';
+  title: string;
   createdAt: string;
   messages: Array<{
     id: string;
@@ -19,6 +20,7 @@ const MEDGEMMA_SEED_SESSIONS: SeedSession[] = [
   {
     id: '11111111-1111-4111-8111-111111111111',
     role: 'doctor',
+    title: 'Gerd akan kambuh kalo minum kopi',
     createdAt: '2026-04-29T01:00:00.000Z',
     messages: [
       {
@@ -40,6 +42,7 @@ const MEDGEMMA_SEED_SESSIONS: SeedSession[] = [
   {
     id: '22222222-2222-4222-8222-222222222222',
     role: 'patient',
+    title: 'Batuk pilek sejak 3 hari',
     createdAt: '2026-04-29T02:00:00.000Z',
     messages: [
       {
@@ -73,13 +76,20 @@ export async function seedMedGemma(dataSource: DataSource): Promise<void> {
         sessionRepository.create({
           id: sessionSeed.id,
           role: sessionSeed.role,
+          title: sessionSeed.title,
           created_at: new Date(sessionSeed.createdAt),
           updated_at: new Date(sessionSeed.createdAt),
         }),
       );
       console.log(`[Seed] MedGemma session created -> ${sessionSeed.id}`);
     } else {
-      console.log(`[Seed] MedGemma session already exists -> skip (${sessionSeed.id})`);
+      if (!existingSession.title) {
+        existingSession.title = sessionSeed.title;
+        await sessionRepository.save(existingSession);
+        console.log(`[Seed] MedGemma session title updated -> ${sessionSeed.id}`);
+      } else {
+        console.log(`[Seed] MedGemma session already exists -> skip (${sessionSeed.id})`);
+      }
     }
 
     for (const messageSeed of sessionSeed.messages) {
