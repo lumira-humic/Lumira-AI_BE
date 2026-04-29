@@ -87,14 +87,14 @@ export class MedicalRecordsService {
     let aiResult: AiResponse;
 
     try {
-      const response = await axios.post<AiResponse>(
+      const response = await axios.post<unknown>(
         'https://lumirahumic-integrasi-ai.hf.space/predict',
         formData,
         {
           headers: formData.getHeaders(),
         },
       );
-      aiResult = response.data;
+      aiResult = this.parseAiResponse(response.data);
     } catch {
       throw new BadRequestException('AI service failed');
     }
@@ -292,7 +292,7 @@ export class MedicalRecordsService {
     let aiResult: AiResponse;
 
     try {
-      const response = await axios.post<AiResponse>(
+      const response = await axios.post<unknown>(
         'https://lumirahumic-integrasi-ai.hf.space/predict',
         formData,
         {
@@ -300,7 +300,7 @@ export class MedicalRecordsService {
         },
       );
 
-      aiResult = response.data;
+      aiResult = this.parseAiResponse(response.data);
     } catch (error: unknown) {
       throw new BadRequestException('AI re-analysis failed');
     }
@@ -397,6 +397,41 @@ export class MedicalRecordsService {
       heatmapImage: record.heatmapImage ?? record.doctorBrushPath,
       uploaded_at: record.uploadedAt.toISOString(),
       validated_at: record.validatedAt ? record.validatedAt.toISOString() : null,
+    };
+  }
+
+  private parseAiResponse(data: unknown): {
+    filename: string;
+    prediction: number;
+    class: 'normal' | 'benign' | 'malignant';
+    confidence: number;
+    probabilities: number[];
+    gradcam_base64: string;
+    gradcam_path: string;
+    feature_dim: number;
+  } {
+    if (!data || typeof data !== 'object') {
+      throw new BadRequestException('Invalid AI response');
+    }
+
+    const payload = data as Record<string, unknown>;
+    const classValue = payload.class;
+
+    if (classValue !== 'normal' && classValue !== 'benign' && classValue !== 'malignant') {
+      throw new BadRequestException('Invalid AI response');
+    }
+
+    return {
+      filename: typeof payload.filename === 'string' ? payload.filename : '',
+      prediction: typeof payload.prediction === 'number' ? payload.prediction : 0,
+      class: classValue,
+      confidence: typeof payload.confidence === 'number' ? payload.confidence : 0,
+      probabilities: Array.isArray(payload.probabilities)
+        ? payload.probabilities.filter((x): x is number => typeof x === 'number')
+        : [],
+      gradcam_base64: typeof payload.gradcam_base64 === 'string' ? payload.gradcam_base64 : '',
+      gradcam_path: typeof payload.gradcam_path === 'string' ? payload.gradcam_path : '',
+      feature_dim: typeof payload.feature_dim === 'number' ? payload.feature_dim : 0,
     };
   }
 

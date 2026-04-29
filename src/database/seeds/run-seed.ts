@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
 
+import { seedMedGemma } from './medgemma.seed';
 import { seedUsers } from './user.seed';
 
 dotenv.config({
@@ -27,6 +28,7 @@ async function runSeeds(): Promise<void> {
     console.log('[Seed] Database connection established.');
 
     await seedUsers(dataSource);
+    await seedMedGemma(dataSource);
 
     console.log('[Seed] All seeds executed successfully.');
   } catch (error) {
