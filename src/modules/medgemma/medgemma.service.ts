@@ -11,6 +11,7 @@ import {
   MedGemmaChatHistoryDto,
   MedGemmaChatMessageDto,
   MedGemmaResponseDto,
+  MedGemmaSessionConversationDto,
 } from './dto/medgemma-response.dto';
 import { MedGemmaConsultDto } from './dto/medgemma-consult.dto';
 import { MedGemmaMessage } from './entities/medgemma-message.entity';
@@ -118,6 +119,24 @@ export class MedGemmaService {
     };
   }
 
+  async getSessionConversations(role: MedGemmaRole): Promise<MedGemmaSessionConversationDto[]> {
+    const sessions = await this.sessionRepo
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.messages', 'message')
+      .where('session.role = :role', { role })
+      .orderBy('session.updated_at', 'DESC')
+      .addOrderBy('message.created_at', 'ASC')
+      .getMany();
+
+    return sessions.map((session) => ({
+      session_id: session.id,
+      role: session.role as MedGemmaRole,
+      created_at: session.created_at.toISOString(),
+      updated_at: session.updated_at.toISOString(),
+      messages: (session.messages ?? []).map((message) => this.toChatMessageDto(message)),
+    }));
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
@@ -206,12 +225,17 @@ export class MedGemmaService {
     }
 
     const startedAt = Date.now();
-    const response = await fetch(baseUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    let response: Response;
+    try {
+      response = await fetch(baseUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      this.rethrowProviderTransportError(error, baseUrl, timeoutMs);
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -378,5 +402,58 @@ export class MedGemmaService {
 
   private toPrecision(value: number, fractionDigits: number): number {
     return Number(value.toFixed(fractionDigits));
+  }
+
+  private rethrowProviderTransportError(error: unknown, baseUrl: string, timeoutMs: number): never {
+    const metadata = this.extractProviderErrorMetadata(error);
+
+    if (metadata.code === 'ENOTFOUND' || metadata.code === 'EAI_AGAIN') {
+      throw new AppException(
+        ErrorCode.INTERNAL_SERVER_ERROR,
+        `MedGemma provider host cannot be resolved. Verify MEDGEMMA_PROVIDER_BASE_URL (${baseUrl}).`,
+        502,
+      );
+    }
+
+    if (metadata.name === 'TimeoutError' || metadata.name === 'AbortError') {
+      throw new AppException(
+        ErrorCode.INTERNAL_SERVER_ERROR,
+        `MedGemma provider request timed out after ${timeoutMs}ms`,
+        504,
+      );
+    }
+
+    if (metadata.code === 'ECONNREFUSED' || metadata.code === 'ECONNRESET') {
+      throw new AppException(
+        ErrorCode.INTERNAL_SERVER_ERROR,
+        `MedGemma provider connection failed (${metadata.code})`,
+        502,
+      );
+    }
+
+    throw new AppException(
+      ErrorCode.INTERNAL_SERVER_ERROR,
+      `MedGemma provider transport error: ${metadata.message || 'Unknown transport error'}`,
+      502,
+    );
+  }
+
+  private extractProviderErrorMetadata(error: unknown): {
+    message: string;
+    name?: string;
+    code?: string;
+  } {
+    if (!(error instanceof Error)) {
+      return { message: 'Unknown transport error' };
+    }
+
+    const errObj = error as Error & { cause?: unknown; code?: string };
+    const cause = errObj.cause as { code?: string; message?: string; name?: string } | undefined;
+
+    return {
+      message: errObj.message,
+      name: errObj.name ?? cause?.name,
+      code: errObj.code ?? cause?.code,
+    };
   }
 }
