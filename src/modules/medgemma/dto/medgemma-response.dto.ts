@@ -94,3 +94,34 @@ export class MedGemmaChatHistoryDto {
   })
   messages!: MedGemmaChatMessageDto[];
 }
+
+export class MedGemmaSessionConversationDto {
+  @ApiProperty({
+    description: 'Conversation session identifier',
+    example: '90e73057-9959-4acd-a80e-26f1780f81f5',
+  })
+  session_id!: string;
+
+  @ApiProperty({
+    enum: ['doctor', 'patient'],
+    example: 'patient',
+  })
+  role!: 'doctor' | 'patient';
+
+  @ApiProperty({
+    example: '2026-04-23T12:00:00.000Z',
+  })
+  created_at!: string;
+
+  @ApiProperty({
+    example: '2026-04-23T12:30:00.000Z',
+  })
+  updated_at!: string;
+
+  @ApiProperty({
+    isArray: true,
+    type: MedGemmaChatMessageDto,
+    description: 'All persisted messages in this MedGemma session',
+  })
+  messages!: MedGemmaChatMessageDto[];
+}
