@@ -24,7 +24,12 @@ import { ApiResponse as ApiResponseType } from '../../common/interfaces/api-resp
 import { UserRole } from '../users/enums/user-role.enum';
 
 import { MedGemmaService } from './medgemma.service';
-import { MedGemmaConsultDto, MedGemmaResponseDto, MedGemmaChatHistoryDto } from './dto';
+import {
+  MedGemmaConsultDto,
+  MedGemmaResponseDto,
+  MedGemmaChatHistoryDto,
+  MedGemmaSessionConversationDto,
+} from './dto';
 
 type AuthActor = {
   actorType: 'user' | 'patient';
@@ -106,6 +111,29 @@ export class MedGemmaController {
 
     const result = await this.medgemmaService.consult(dto, resolvedRole);
     return ResponseHelper.success(result, 'MedGemma AI response');
+  }
+
+  @Get('sessions')
+  @ApiOperation({
+    summary: 'Get all MedGemma session conversations',
+    description:
+      'Returns all persisted MedGemma conversation sessions for the authenticated actor role, including every message in each session.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'All MedGemma session conversations for the current role',
+    type: MedGemmaSessionConversationDto,
+    isArray: true,
+  })
+  async getSessionConversations(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<ApiResponseType<MedGemmaSessionConversationDto[]>> {
+    const resolvedRole = this.resolveRole(req.user);
+
+    return ResponseHelper.success(
+      await this.medgemmaService.getSessionConversations(resolvedRole),
+      'MedGemma session conversations',
+    );
   }
 
   @Get('sessions/:session_id/history')

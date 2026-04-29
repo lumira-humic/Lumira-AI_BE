@@ -4,4 +4,5 @@ export {
   MedGemmaProfilingDto,
   MedGemmaChatHistoryDto,
   MedGemmaChatMessageDto,
+  MedGemmaSessionConversationDto,
 } from './medgemma-response.dto';
