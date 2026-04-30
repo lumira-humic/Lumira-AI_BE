@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "status": {
+      "$actorType": {
+        "$actorId": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid === $actorId && auth.token.actorType === $actorType",
+          ".validate": "newData.hasChildren(['state', 'last_changed']) && (newData.child('state').val() === 'online' || newData.child('state').val() === 'offline')"
+        }
+      }
+    }
+  }
+}

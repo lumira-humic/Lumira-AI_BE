@@ -34,11 +34,12 @@ export const validationSchema = Joi.object({
   MEDGEMMA_PROVIDER_TIMEOUT_MS: Joi.number().default(30000),
   MEDGEMMA_SESSION_TTL: Joi.number().default(86400),
 
-  // Firebase (FCM + Firestore)
+  // Firebase (Auth Custom Token + Firestore + RTDB + FCM)
   FIREBASE_ENABLED: Joi.boolean().default(false),
   FIREBASE_PROJECT_ID: Joi.string().allow('').optional(),
   FIREBASE_CLIENT_EMAIL: Joi.string().allow('').optional(),
   FIREBASE_PRIVATE_KEY: Joi.string().allow('').optional(),
+  FIREBASE_DATABASE_URL: Joi.string().uri().allow('').optional(),
 
   // JWT
   JWT_SECRET: Joi.string().required(),

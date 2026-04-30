@@ -18,6 +18,7 @@ interface SendResult {
 @Injectable()
 export class FcmNotificationService {
   private readonly logger = new Logger(FcmNotificationService.name);
+  private readonly maxMulticastTokensPerRequest = 500;
 
   constructor(private readonly firebaseAdminService: FirebaseAdminService) {}
 
@@ -31,56 +32,61 @@ export class FcmNotificationService {
       return { invalidTokens: [] };
     }
 
-    const message: MulticastMessage = {
-      tokens,
-      notification: {
-        title: `${payload.senderName} mengirim pesan`,
-        body: payload.messagePreview,
-      },
-      data: {
-        type: 'chat_message',
-        room_id: payload.roomId,
-        message_id: payload.messageId,
-        sender_id: payload.senderId,
-        sender_name: payload.senderName,
-        message_preview: payload.messagePreview,
-      },
-      android: {
-        priority: 'high',
-      },
-      apns: {
-        headers: {
-          'apns-priority': '10',
+    const invalidTokens: string[] = [];
+
+    for (let i = 0; i < tokens.length; i += this.maxMulticastTokensPerRequest) {
+      const chunk = tokens.slice(i, i + this.maxMulticastTokensPerRequest);
+
+      const message: MulticastMessage = {
+        tokens: chunk,
+        notification: {
+          title: `${payload.senderName} mengirim pesan`,
+          body: payload.messagePreview,
         },
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
+        data: {
+          type: 'chat_message',
+          room_id: payload.roomId,
+          message_id: payload.messageId,
+          sender_id: payload.senderId,
+          sender_name: payload.senderName,
+          message_preview: payload.messagePreview,
+        },
+        android: {
+          priority: 'high',
+        },
+        apns: {
+          headers: {
+            'apns-priority': '10',
+          },
+          payload: {
+            aps: {
+              sound: 'default',
+              badge: 1,
+            },
           },
         },
-      },
-    };
+      };
 
-    const result = await messaging.sendEachForMulticast(message);
+      const result = await messaging.sendEachForMulticast(message);
 
-    const invalidTokens: string[] = [];
-    result.responses.forEach((response, index) => {
-      if (response.success) {
-        return;
-      }
+      result.responses.forEach((response, index) => {
+        if (response.success) {
+          return;
+        }
 
-      const code = response.error?.code || '';
-      const shouldDeactivate =
-        code === 'messaging/invalid-registration-token' ||
-        code === 'messaging/registration-token-not-registered';
+        const code = response.error?.code || '';
+        const shouldDeactivate =
+          code === 'messaging/invalid-registration-token' ||
+          code === 'messaging/registration-token-not-registered';
 
-      if (shouldDeactivate) {
-        invalidTokens.push(tokens[index]);
-      }
+        if (shouldDeactivate) {
+          invalidTokens.push(chunk[index]);
+        }
 
-      const reason = response.error?.message || 'unknown error';
-      this.logger.warn(`FCM send failed for token index ${index}: ${code} ${reason}`);
-    });
+        const reason = response.error?.message || 'unknown error';
+        this.logger.warn(`FCM send failed for token index ${i + index}: ${code} ${reason}`);
+      });
+    }
 
     return { invalidTokens };
   }
