@@ -1,13 +1,12 @@
-import { Entity, Column, OneToMany } from 'typeorm';
 import { Exclude } from 'class-transformer';
+import { Column, Entity, OneToMany } from 'typeorm';
 
 import { BaseEntity } from '../../../common/entities/base.entity';
 
+import { ActivityLog } from '../../activities/entities/activity-log.entity';
+import { MedicalRecord } from '../../medical-records/entities/medical-record.entity';
 import { UserRole } from '../enums/user-role.enum';
 import { UserStatus } from '../enums/user-status.enum';
-import { MedicalRecord } from '../../medical-records/entities/medical-record.entity';
-import { ActivityLog } from '../../activities/entities/activity-log.entity';
-import { ChatMessage } from '../../chat/entities/chat-message.entity';
 
 /**
  * System user entity — represents administrators and doctors.
@@ -52,8 +51,4 @@ export class User extends BaseEntity {
   /** Activity log entries associated with this user. */
   @OneToMany(() => ActivityLog, (log) => log.user)
   activityLogs: ActivityLog[];
-
-  /** Chat messages sent by this user (as doctor). */
-  @OneToMany(() => ChatMessage, (message) => message.doctor)
-  chatMessages: ChatMessage[];
 }

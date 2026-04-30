@@ -1,11 +1,10 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
 import { BaseEntity } from '../../../common/entities/base.entity';
 
 import { MedicalRecord } from '../../medical-records/entities/medical-record.entity';
 import { Patient } from '../../patients/entities/patient.entity';
 import { User } from '../../users/entities/user.entity';
-import { ChatMessage } from './chat-message.entity';
 
 @Entity('chat_rooms')
 @Index(['patientId', 'doctorId'])
@@ -34,7 +33,4 @@ export class ChatRoom extends BaseEntity {
   @ManyToOne(() => MedicalRecord, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'medical_record_id' })
   medicalRecord!: MedicalRecord;
-
-  @OneToMany(() => ChatMessage, (chatMessage) => chatMessage.room)
-  messages!: ChatMessage[];
 }

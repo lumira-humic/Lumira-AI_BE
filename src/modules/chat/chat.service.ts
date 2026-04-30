@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -12,37 +12,35 @@ import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/enums/user-role.enum';
 import { UserStatus } from '../users/enums/user-status.enum';
 
-import { ChatMessageRepository } from './chat-message.repository';
-import { ChatOutboxService } from './chat-outbox.service';
 import { ChatRoomRepository } from './chat-room.repository';
 import { DeviceTokenRepository } from './device-token.repository';
 import {
-  ChatHistoryGroupDto,
-  ChatMessageDto,
   ChatRoomDto,
   ChatRoomSummaryDto,
   CreateChatRoomDto,
-  QueryChatHistoryDto,
+  FirebaseTokenDto,
+  NotifyChatMessageDto,
   RegisterDeviceTokenDto,
   RemoveDeviceTokenDto,
-  SendChatMessageDto,
 } from './dto';
-import { ChatMessage } from './entities/chat-message.entity';
 import { ChatRoom } from './entities/chat-room.entity';
-import { SenderType } from './enums';
+import { FcmNotificationService } from './fcm-notification.service';
+import { FirebaseAdminService } from './firebase-admin.service';
+import { FirestoreChatService } from './firestore-chat.service';
 
 type AuthActor = (User | Patient) & { actorType: 'user' | 'patient' };
 
-/**
- * Service for chat message management.
- */
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+  private static readonly FIREBASE_TOKEN_TTL_SECONDS = 3600;
+
   constructor(
     private readonly chatRoomRepository: ChatRoomRepository,
-    private readonly chatMessageRepository: ChatMessageRepository,
     private readonly deviceTokenRepository: DeviceTokenRepository,
-    private readonly chatOutboxService: ChatOutboxService,
+    private readonly firebaseAdminService: FirebaseAdminService,
+    private readonly firestoreChatService: FirestoreChatService,
+    private readonly fcmNotificationService: FcmNotificationService,
     @InjectRepository(Patient)
     private readonly patientRepository: Repository<Patient>,
     @InjectRepository(User)
@@ -70,11 +68,9 @@ export class ChatService {
     if (!doctor) {
       throw new AppException(ErrorCode.NOT_FOUND, 'Doctor not found', 404);
     }
-
     if (doctor.role !== UserRole.DOCTOR) {
       throw new AppException(ErrorCode.VALIDATION_ERROR, 'Target user is not a doctor', 400);
     }
-
     if (doctor.status !== UserStatus.ACTIVE) {
       throw new AppException(ErrorCode.FORBIDDEN, 'Doctor account is inactive', 403);
     }
@@ -82,11 +78,9 @@ export class ChatService {
     const medicalRecord = await this.medicalRecordRepository.findOne({
       where: { id: dto.medicalRecordId },
     });
-
     if (!medicalRecord) {
       throw new AppException(ErrorCode.NOT_FOUND, 'Medical record not found', 404);
     }
-
     if (medicalRecord.patientId !== dto.patientId) {
       throw new AppException(
         ErrorCode.VALIDATION_ERROR,
@@ -94,7 +88,6 @@ export class ChatService {
         400,
       );
     }
-
     if (medicalRecord.validatorId && medicalRecord.validatorId !== doctorId) {
       throw new AppException(
         ErrorCode.FORBIDDEN,
@@ -103,12 +96,11 @@ export class ChatService {
       );
     }
 
-    const existingByRecord = await this.chatRoomRepository.findByMedicalRecordId(
-      dto.medicalRecordId,
-    );
-    if (existingByRecord) {
-      this.assertActorCanAccessRoom(actor, existingByRecord);
-      return ChatRoomDto.fromEntity(existingByRecord);
+    const existing = await this.chatRoomRepository.findByMedicalRecordId(dto.medicalRecordId);
+    if (existing) {
+      this.assertActorCanAccessRoom(actor, existing);
+      await this.mirrorRoomToFirestore(existing, patient, doctor);
+      return ChatRoomDto.fromEntity(existing);
     }
 
     const room = this.chatRoomRepository.create({
@@ -120,16 +112,7 @@ export class ChatService {
     });
 
     const savedRoom = await this.chatRoomRepository.save(room);
-    await this.chatOutboxService.enqueueRoomUpsert({
-      roomId: savedRoom.id,
-      patientId: savedRoom.patientId,
-      doctorId: savedRoom.doctorId,
-      medicalRecordId: savedRoom.medicalRecordId,
-      firstContactNotifiedAt: savedRoom.firstContactNotifiedAt
-        ? savedRoom.firstContactNotifiedAt.toISOString()
-        : null,
-      updatedAt: new Date().toISOString(),
-    });
+    await this.mirrorRoomToFirestore(savedRoom, patient, doctor);
 
     return ChatRoomDto.fromEntity(savedRoom);
   }
@@ -139,60 +122,112 @@ export class ChatService {
       actor.actorType,
       actor.id,
     );
-    const roomIds = rooms.map((room) => room.id);
-    const counterpartActorType: 'user' | 'patient' =
-      actor.actorType === 'patient' ? 'user' : 'patient';
-    const counterpartIds = Array.from(
-      new Set(
-        rooms.map((room) => (actor.actorType === 'patient' ? room.doctorId : room.patientId)),
-      ),
-    );
-
-    const [latestMessages, unreadRows, latestSeenRows] = await Promise.all([
-      this.chatMessageRepository.findLatestByRoomIds(roomIds),
-      this.chatMessageRepository.countUnreadByRoomIds(roomIds, actor.id),
-      this.deviceTokenRepository.findLatestSeenAtByActorIds(counterpartActorType, counterpartIds),
-    ]);
-
-    const latestByRoomId = new Map(latestMessages.map((message) => [message.roomId, message]));
-    const unreadByRoomId = new Map(unreadRows.map((row) => [row.roomId, row.unreadCount]));
-    const counterpartLastSeenById = new Map(
-      latestSeenRows.map((row) => [row.actorId, row.lastSeenAt]),
-    );
-
-    return ChatRoomSummaryDto.fromEntities(
-      rooms,
-      latestByRoomId,
-      unreadByRoomId,
-      counterpartLastSeenById,
-      actor,
-      new Date(),
-    );
+    return ChatRoomSummaryDto.fromEntities(rooms, actor);
   }
 
-  async getChatHistoryGroupedByDate(
+  async mintFirebaseToken(actor: AuthActor): Promise<FirebaseTokenDto> {
+    if (!this.firebaseAdminService.isEnabled()) {
+      throw new AppException(
+        ErrorCode.INTERNAL_SERVER_ERROR,
+        'Firebase is not configured on the server. Realtime chat is unavailable.',
+        503,
+      );
+    }
+
+    const claims: Record<string, unknown> = {
+      actorType: actor.actorType,
+    };
+
+    const customToken = await this.firebaseAdminService.createCustomToken(actor.id, claims);
+    if (!customToken) {
+      throw new AppException(
+        ErrorCode.INTERNAL_SERVER_ERROR,
+        'Failed to mint Firebase custom token',
+        500,
+      );
+    }
+
+    const dto = new FirebaseTokenDto();
+    dto.customToken = customToken;
+    dto.expiresIn = ChatService.FIREBASE_TOKEN_TTL_SECONDS;
+    dto.uid = actor.id;
+    dto.actorType = actor.actorType;
+    return dto;
+  }
+
+  async notifyChatMessage(
     actor: AuthActor,
     roomId: string,
-    query: QueryChatHistoryDto,
-  ): Promise<ChatHistoryGroupDto[]> {
-    const messages = await this.getChatHistory(actor, roomId, query);
-    const grouped = new Map<string, ChatMessageDto[]>();
+    dto: NotifyChatMessageDto,
+  ): Promise<{ delivered: number; deactivated: number }> {
+    const room = await this.getRoomOrThrow(roomId);
+    this.assertActorCanAccessRoom(actor, room);
 
-    messages.forEach((message) => {
-      const dateKey = this.toUtcDateKey(new Date(message.created_at));
-      const existing = grouped.get(dateKey) || [];
-      existing.push(message);
-      grouped.set(dateKey, existing);
-    });
+    if (!this.firebaseAdminService.isEnabled()) {
+      this.logger.warn(
+        `notifyChatMessage skipped: Firebase disabled (room=${roomId}, message=${dto.messageId})`,
+      );
+      return { delivered: 0, deactivated: 0 };
+    }
 
-    return ChatHistoryGroupDto.fromEntries(Array.from(grouped.entries()));
+    const message = await this.firestoreChatService.getMessage(roomId, dto.messageId);
+    if (!message) {
+      throw new AppException(
+        ErrorCode.NOT_FOUND,
+        'Message not found in Firestore. Make sure the SDK write succeeded before calling notify.',
+        404,
+      );
+    }
+
+    if (message.senderId !== actor.id) {
+      throw new AppException(
+        ErrorCode.FORBIDDEN,
+        'Only the message sender can notify for that message',
+        403,
+      );
+    }
+
+    const counterpartType: 'user' | 'patient' = actor.actorType === 'patient' ? 'user' : 'patient';
+    const tokens = await this.deviceTokenRepository.findActiveByActor(
+      counterpartType,
+      message.receiverId,
+    );
+
+    if (tokens.length === 0) {
+      await this.markFirstContactIfNeeded(room);
+      return { delivered: 0, deactivated: 0 };
+    }
+
+    const senderName = this.resolveActorName(actor);
+
+    const result = await this.fcmNotificationService.sendChatMessage(
+      tokens.map((t) => t.fcmToken),
+      {
+        roomId,
+        messageId: message.id,
+        senderId: actor.id,
+        senderName,
+        messagePreview: this.buildPreview(message.message),
+      },
+    );
+
+    if (result.invalidTokens.length > 0) {
+      await Promise.all(
+        result.invalidTokens.map((token) => this.deviceTokenRepository.deactivateByToken(token)),
+      );
+    }
+
+    await this.markFirstContactIfNeeded(room);
+
+    return {
+      delivered: tokens.length - result.invalidTokens.length,
+      deactivated: result.invalidTokens.length,
+    };
   }
 
   async registerDeviceToken(actor: AuthActor, dto: RegisterDeviceTokenDto): Promise<void> {
     const existingByToken = await this.deviceTokenRepository.findOne({
-      where: {
-        fcmToken: dto.fcmToken,
-      },
+      where: { fcmToken: dto.fcmToken },
     });
 
     if (existingByToken) {
@@ -214,7 +249,6 @@ export class ChatService {
       isActive: true,
       lastSeenAt: new Date(),
     });
-
     await this.deviceTokenRepository.save(token);
   }
 
@@ -226,222 +260,22 @@ export class ChatService {
         fcmToken: dto.fcmToken,
       },
     });
-
     if (!token) {
       return;
     }
-
     token.isActive = false;
     token.lastSeenAt = new Date();
     await this.deviceTokenRepository.save(token);
   }
 
-  /**
-   * Get room chat history with cursor pagination.
-   */
-  private async getChatHistory(
-    actor: AuthActor,
-    roomId: string,
-    query: QueryChatHistoryDto,
-  ): Promise<ChatMessageDto[]> {
-    const room = await this.getRoomOrThrow(roomId);
-    this.assertActorCanAccessRoom(actor, room);
-
-    const rows = await this.chatMessageRepository.findHistory(
-      roomId,
-      query.limit || 20,
-      query.before,
-      query.after,
-    );
-
-    return ChatMessageDto.fromEntities(rows);
-  }
-
-  /**
-   * Send a new chat message.
-   */
-  async sendMessage(
-    actor: AuthActor,
-    roomId: string,
-    dto: SendChatMessageDto,
-  ): Promise<ChatMessageDto> {
-    const room = await this.getRoomOrThrow(roomId);
-    this.assertActorCanAccessRoom(actor, room);
-
-    const senderType = actor.actorType === 'patient' ? SenderType.PATIENT : SenderType.DOCTOR;
-    const senderId = actor.id;
-    const receiverId = actor.actorType === 'patient' ? room.doctorId : room.patientId;
-
-    if (dto.clientMessageId) {
-      const existing = await this.chatMessageRepository.findByClientMessageId(
-        room.id,
-        senderId,
-        dto.clientMessageId,
-      );
-
-      if (existing) {
-        return ChatMessageDto.fromEntity(existing);
-      }
-    }
-
-    const message = this.chatMessageRepository.create({
-      id: generatePrefixedId('CHM'),
-      roomId: room.id,
-      patientId: room.patientId,
-      doctorId: room.doctorId,
-      senderType,
-      senderId,
-      receiverId,
-      message: dto.message,
-      isRead: false,
-      clientMessageId: dto.clientMessageId || null,
-    });
-
-    const savedMessage = await this.chatMessageRepository.save(message);
-
-    await this.chatRoomRepository.update(room.id, { updatedAt: new Date() });
-
-    await this.chatOutboxService.enqueueRoomUpsert({
-      roomId: room.id,
-      patientId: room.patientId,
-      doctorId: room.doctorId,
-      medicalRecordId: room.medicalRecordId,
-      firstContactNotifiedAt: room.firstContactNotifiedAt
-        ? room.firstContactNotifiedAt.toISOString()
-        : null,
-      updatedAt: new Date().toISOString(),
-    });
-    await this.chatOutboxService.enqueueMessageSync({
-      messageId: savedMessage.id,
-      roomId: savedMessage.roomId,
-      patientId: savedMessage.patientId,
-      doctorId: savedMessage.doctorId,
-      senderType: savedMessage.senderType,
-      senderId: savedMessage.senderId,
-      receiverId: savedMessage.receiverId,
-      message: savedMessage.message,
-      isRead: savedMessage.isRead,
-      createdAt: savedMessage.createdAt.toISOString(),
-    });
-
-    const receiverActorType: 'user' | 'patient' =
-      actor.actorType === 'patient' ? 'user' : 'patient';
-    const senderName = 'name' in actor ? actor.name : 'Unknown';
-    const messagePreview = dto.message.slice(0, 120);
-
-    await this.chatOutboxService.enqueueFcmSend({
-      receiverActorType,
-      receiverActorId: receiverId,
-      roomId: room.id,
-      messageId: savedMessage.id,
-      senderId,
-      senderName,
-      messagePreview,
-    });
-
-    const firstContactAt = new Date();
-    const firstContactUpdate = await this.chatRoomRepository
-      .createQueryBuilder()
-      .update(ChatRoom)
-      .set({
-        firstContactNotifiedAt: firstContactAt,
-        updatedAt: firstContactAt,
-      })
-      .where('id = :roomId', { roomId: room.id })
-      .andWhere('first_contact_notified_at IS NULL')
-      .execute();
-
-    if ((firstContactUpdate.affected || 0) > 0) {
-      await this.chatOutboxService.enqueueRoomFirstContact({
-        roomId: room.id,
-        at: firstContactAt.toISOString(),
-      });
-      await this.chatOutboxService.enqueueDoctorNewsActivity({
-        roomId: room.id,
-        doctorId: room.doctorId,
-        patientId: room.patientId,
-        at: firstContactAt.toISOString(),
-      });
-    }
-
-    return ChatMessageDto.fromEntity(savedMessage, room.medicalRecordId);
-  }
-
-  async markRoomAsRead(actor: AuthActor, roomId: string): Promise<number> {
-    const room = await this.getRoomOrThrow(roomId);
-    this.assertActorCanAccessRoom(actor, room);
-
-    const readerId = actor.id;
-    const readAt = new Date();
-
-    const updateResult = await this.chatMessageRepository
-      .createQueryBuilder()
-      .update(ChatMessage)
-      .set({ isRead: true })
-      .where('room_id = :roomId', { roomId })
-      .andWhere('receiver_id = :readerId', { readerId })
-      .andWhere('is_read = false')
-      .execute();
-
-    await this.chatOutboxService.enqueueRoomMessagesRead({
-      roomId,
-      readerId,
-      readAt: readAt.toISOString(),
-    });
-
-    return updateResult.affected || 0;
-  }
-
-  async markMessageAsRead(actor: AuthActor, roomId: string, messageId: string): Promise<number> {
-    const room = await this.getRoomOrThrow(roomId);
-    this.assertActorCanAccessRoom(actor, room);
-
-    const message = await this.chatMessageRepository.findOne({
-      where: { id: messageId, roomId },
-    });
-
-    if (!message) {
-      throw new AppException(ErrorCode.NOT_FOUND, 'Chat message not found', 404);
-    }
-
-    if (message.receiverId !== actor.id) {
-      throw new AppException(
-        ErrorCode.FORBIDDEN,
-        'You are not allowed to mark this message as read',
-        403,
-      );
-    }
-
-    const readAt = new Date();
-    const updateResult = await this.chatMessageRepository
-      .createQueryBuilder()
-      .update(ChatMessage)
-      .set({ isRead: true })
-      .where('id = :messageId', { messageId })
-      .andWhere('room_id = :roomId', { roomId })
-      .andWhere('receiver_id = :readerId', { readerId: actor.id })
-      .andWhere('is_read = false')
-      .execute();
-
-    const updated = updateResult.affected || 0;
-    if (updated > 0) {
-      await this.chatOutboxService.enqueueMessageRead({
-        roomId,
-        messageId,
-        readerId: actor.id,
-        readAt: readAt.toISOString(),
-      });
-    }
-
-    return updated;
-  }
-
   private async getRoomOrThrow(roomId: string): Promise<ChatRoom> {
-    const room = await this.chatRoomRepository.findOne({ where: { id: roomId } });
+    const room = await this.chatRoomRepository.findOne({
+      where: { id: roomId },
+      relations: ['patient', 'doctor'],
+    });
     if (!room) {
       throw new AppException(ErrorCode.NOT_FOUND, 'Chat room not found', 404);
     }
-
     return room;
   }
 
@@ -450,16 +284,13 @@ export class ChatService {
       if (actor.id !== room.patientId) {
         throw new AppException(ErrorCode.FORBIDDEN, 'You are not allowed to access this room', 403);
       }
-
       return;
     }
 
     const role = 'role' in actor ? actor.role : UserRole.DOCTOR;
-    const isAdmin = role === UserRole.ADMIN;
-    if (isAdmin) {
+    if (role === UserRole.ADMIN) {
       return;
     }
-
     if (actor.id !== room.doctorId) {
       throw new AppException(ErrorCode.FORBIDDEN, 'You are not allowed to access this room', 403);
     }
@@ -470,7 +301,6 @@ export class ChatService {
       if (!doctorId) {
         throw new AppException(ErrorCode.VALIDATION_ERROR, 'doctorId is required for patient', 400);
       }
-
       return doctorId;
     }
 
@@ -479,26 +309,73 @@ export class ChatService {
       if (doctorId) {
         return doctorId;
       }
-
       throw new AppException(
         ErrorCode.VALIDATION_ERROR,
         'doctorId is required for admin actor',
         400,
       );
     }
-
     return actor.id;
   }
 
-  async heartbeat(actor: AuthActor): Promise<void> {
-    await this.deviceTokenRepository.updateLastSeenAt(actor.actorType, actor.id);
+  private resolveActorName(actor: AuthActor): string {
+    if ('name' in actor && typeof actor.name === 'string' && actor.name.length > 0) {
+      return actor.name;
+    }
+    return actor.id;
   }
 
-  private toUtcDateKey(date: Date): string {
-    return date.toISOString().slice(0, 10);
+  private buildPreview(message: string): string {
+    const trimmed = message.trim();
+    return trimmed.length <= 120 ? trimmed : `${trimmed.slice(0, 117)}...`;
   }
 
-  async processOutbox(): Promise<void> {
-    await this.chatOutboxService.processDueEvents();
+  private async mirrorRoomToFirestore(
+    room: ChatRoom,
+    patient: Patient,
+    doctor: User,
+  ): Promise<void> {
+    if (!this.firebaseAdminService.isEnabled()) {
+      return;
+    }
+
+    try {
+      await this.firestoreChatService.upsertRoom({
+        roomId: room.id,
+        patientId: room.patientId,
+        doctorId: room.doctorId,
+        medicalRecordId: room.medicalRecordId,
+        patientName: patient.name,
+        doctorName: doctor.name,
+        firstContactNotifiedAt: room.firstContactNotifiedAt
+          ? room.firstContactNotifiedAt.toISOString()
+          : null,
+        createdAt: room.createdAt.toISOString(),
+        updatedAt: room.updatedAt.toISOString(),
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Failed to mirror chat room ${room.id} to Firestore: ${reason}`);
+    }
+  }
+
+  private async markFirstContactIfNeeded(room: ChatRoom): Promise<void> {
+    if (room.firstContactNotifiedAt) {
+      return;
+    }
+
+    const at = new Date();
+    room.firstContactNotifiedAt = at;
+    try {
+      await this.chatRoomRepository.save(room);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Failed to set firstContactNotifiedAt for room ${room.id}: ${reason}`);
+      return;
+    }
+
+    if (this.firebaseAdminService.isEnabled()) {
+      await this.firestoreChatService.updateRoomFirstContact(room.id, at);
+    }
   }
 }

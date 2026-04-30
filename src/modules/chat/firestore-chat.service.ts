@@ -7,22 +7,26 @@ interface FirestoreRoomPayload {
   patientId: string;
   doctorId: string;
   medicalRecordId: string;
+  patientName: string;
+  doctorName: string;
   firstContactNotifiedAt: string | null;
+  createdAt: string;
   updatedAt: string;
 }
 
-interface FirestoreMessagePayload {
-  messageId: string;
+export type FirestoreMessageRecord = {
+  id: string;
   roomId: string;
   patientId: string;
   doctorId: string;
-  senderType: string;
+  senderType: 'doctor' | 'patient';
   senderId: string;
   receiverId: string;
   message: string;
   isRead: boolean;
-  createdAt: string;
-}
+  createdAt: Date;
+  clientMessageId: string | null;
+};
 
 @Injectable()
 export class FirestoreChatService {
@@ -45,101 +49,14 @@ export class FirestoreChatService {
           patient_id: room.patientId,
           doctor_id: room.doctorId,
           medical_record_id: room.medicalRecordId,
+          patient_name: room.patientName,
+          doctor_name: room.doctorName,
           first_contact_notified_at: room.firstContactNotifiedAt,
+          created_at: new Date(room.createdAt),
           updated_at: new Date(room.updatedAt),
         },
         { merge: true },
       );
-  }
-
-  async addMessage(message: FirestoreMessagePayload): Promise<void> {
-    const firestore = this.firebaseAdminService.getFirestore();
-    if (!firestore) {
-      return;
-    }
-
-    await firestore
-      .collection('rooms')
-      .doc(message.roomId)
-      .collection('messages')
-      .doc(message.messageId)
-      .set({
-        message_id: message.messageId,
-        room_id: message.roomId,
-        patient_id: message.patientId,
-        doctor_id: message.doctorId,
-        sender_type: message.senderType,
-        sender_id: message.senderId,
-        receiver_id: message.receiverId,
-        message: message.message,
-        is_read: message.isRead,
-        created_at: new Date(message.createdAt),
-      });
-  }
-
-  async markRoomMessagesRead(roomId: string, readerId: string, readAt: Date): Promise<void> {
-    const firestore = this.firebaseAdminService.getFirestore();
-    if (!firestore) {
-      return;
-    }
-
-    const snapshot = await firestore
-      .collection('rooms')
-      .doc(roomId)
-      .collection('messages')
-      .where('receiver_id', '==', readerId)
-      .where('is_read', '==', false)
-      .get();
-
-    if (snapshot.empty) {
-      return;
-    }
-
-    const batch = firestore.batch();
-    snapshot.docs.forEach((doc) => {
-      batch.update(doc.ref, {
-        is_read: true,
-        read_at: readAt,
-      });
-    });
-
-    await batch.commit();
-  }
-
-  async markMessageRead(
-    roomId: string,
-    messageId: string,
-    readerId: string,
-    readAt: Date,
-  ): Promise<void> {
-    const firestore = this.firebaseAdminService.getFirestore();
-    if (!firestore) {
-      return;
-    }
-
-    const messageRef = firestore
-      .collection('rooms')
-      .doc(roomId)
-      .collection('messages')
-      .doc(messageId);
-
-    const snapshot = await messageRef.get();
-    if (!snapshot.exists) {
-      return;
-    }
-
-    const data = snapshot.data() || {};
-    if (data.receiver_id !== readerId) {
-      return;
-    }
-
-    await messageRef.set(
-      {
-        is_read: true,
-        read_at: readAt,
-      },
-      { merge: true },
-    );
   }
 
   async updateRoomFirstContact(roomId: string, at: Date): Promise<void> {
@@ -160,5 +77,56 @@ export class FirestoreChatService {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Failed to update first_contact_notified_at in Firestore: ${message}`);
     }
+  }
+
+  async getMessage(roomId: string, messageId: string): Promise<FirestoreMessageRecord | null> {
+    const firestore = this.firebaseAdminService.getFirestore();
+    if (!firestore) {
+      return null;
+    }
+
+    const snapshot = await firestore
+      .collection('rooms')
+      .doc(roomId)
+      .collection('messages')
+      .doc(messageId)
+      .get();
+
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return this.mapMessageDoc(snapshot.id, snapshot.data() || {});
+  }
+
+  private toDate(value: unknown): Date | null {
+    if (!value) {
+      return null;
+    }
+    if (value instanceof Date) {
+      return value;
+    }
+    if (typeof value === 'object' && value !== null && 'toDate' in value) {
+      const maybeWithToDate = value as { toDate: () => Date };
+      return maybeWithToDate.toDate();
+    }
+    const parsed = new Date(String(value));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private mapMessageDoc(docId: string, data: Record<string, unknown>): FirestoreMessageRecord {
+    return {
+      id: String(data.message_id || docId),
+      roomId: String(data.room_id || ''),
+      patientId: String(data.patient_id || ''),
+      doctorId: String(data.doctor_id || ''),
+      senderType: data.sender_type === 'doctor' ? 'doctor' : 'patient',
+      senderId: String(data.sender_id || ''),
+      receiverId: String(data.receiver_id || ''),
+      message: String(data.message || ''),
+      isRead: Boolean(data.is_read),
+      createdAt: this.toDate(data.created_at) || new Date(),
+      clientMessageId: data.client_message_id ? String(data.client_message_id) : null,
+    };
   }
 }

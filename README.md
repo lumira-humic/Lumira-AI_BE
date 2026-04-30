@@ -27,17 +27,17 @@ Backend REST API untuk aplikasi Lumira AI, dibangun dengan **NestJS**, **TypeORM
 
 ## Tech Stack
 
-| Layer | Teknologi |
-|---|---|
-| Framework | [NestJS](https://nestjs.com/) v10 |
-| Language | TypeScript |
-| ORM | [TypeORM](https://typeorm.io/) v0.3 |
-| Database | PostgreSQL |
-| Cache | Redis |
-| Auth | JWT (Access + Refresh Token) |
-| Realtime / Chat | Firebase Firestore + FCM |
-| Docs | Swagger / OpenAPI |
-| Validation | class-validator + Joi |
+| Layer           | Teknologi                           |
+| --------------- | ----------------------------------- |
+| Framework       | [NestJS](https://nestjs.com/) v10   |
+| Language        | TypeScript                          |
+| ORM             | [TypeORM](https://typeorm.io/) v0.3 |
+| Database        | PostgreSQL                          |
+| Cache           | Redis                               |
+| Auth            | JWT (Access + Refresh Token)        |
+| Realtime / Chat | Firebase Firestore + FCM            |
+| Docs            | Swagger / OpenAPI                   |
+| Validation      | class-validator + Joi               |
 
 ---
 
@@ -156,11 +156,12 @@ CLOUDINARY_UPLOAD_TIMEOUT_MS=60000
 OBJECT_STORAGE_LOCAL_UPLOAD_DIR=uploads
 OBJECT_STORAGE_LOCAL_BASE_URL=/uploads
 
-# Firebase (Chat — Firestore & FCM)
+# Firebase (Chat — Firestore, RTDB & FCM)
 FIREBASE_ENABLED=true
 FIREBASE_PROJECT_ID=your_firebase_project_id
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_KEY\n-----END PRIVATE KEY-----\n"
+FIREBASE_DATABASE_URL=https://your_firebase_project_id-default-rtdb.firebaseio.com
 ```
 
 > ⚠️ **Penting:** Jangan pernah commit file `.env.*` ke repository. File ini sudah di-ignore oleh `.gitignore`.
@@ -237,11 +238,11 @@ Seeder akan otomatis dilewati jika data sudah ada (idempotent/aman dijalankan be
 
 **Kredensial Admin Default:**
 
-| Field | Value |
-|---|---|
-| Email | `admin@lumira.ai` |
-| Password | `Admin@123!` |
-| Role | `admin` |
+| Field    | Value             |
+| -------- | ----------------- |
+| Email    | `admin@lumira.ai` |
+| Password | `Admin@123!`      |
+| Role     | `admin`           |
 
 > ⚠️ **Segera ganti password admin** setelah pertama kali login di environment production.
 
@@ -261,23 +262,23 @@ Aplikasi akan berjalan di: `http://localhost:3000`
 
 ## Scripts Tersedia
 
-| Script | Perintah | Keterangan |
-|---|---|---|
-| `start` | `npm run start` | Jalankan aplikasi |
-| `start:dev` | `npm run start:dev` | Jalankan dengan watch mode |
-| `start:debug` | `npm run start:debug` | Jalankan dengan debug mode |
-| `start:prod` | `npm run start:prod` | Jalankan build production |
-| `build` | `npm run build` | Build ke folder `dist/` |
-| `migration:run` | `npm run migration:run` | Jalankan migrasi |
-| `migration:generate` | `npm run migration:generate <path>` | Generate migrasi dari entity |
-| `migration:create` | `npm run migration:create <path>` | Buat file migrasi kosong |
-| `migration:revert` | `npm run migration:revert` | Rollback migrasi terakhir |
-| `seed:run` | `npm run seed:run` | Jalankan semua seeder |
-| `lint` | `npm run lint` | Cek kode dengan ESLint |
-| `format` | `npm run format` | Format kode dengan Prettier |
-| `test` | `npm run test` | Jalankan unit test |
-| `test:e2e` | `npm run test:e2e` | Jalankan end-to-end test |
-| `test:cov` | `npm run test:cov` | Jalankan test dengan coverage report |
+| Script               | Perintah                            | Keterangan                           |
+| -------------------- | ----------------------------------- | ------------------------------------ |
+| `start`              | `npm run start`                     | Jalankan aplikasi                    |
+| `start:dev`          | `npm run start:dev`                 | Jalankan dengan watch mode           |
+| `start:debug`        | `npm run start:debug`               | Jalankan dengan debug mode           |
+| `start:prod`         | `npm run start:prod`                | Jalankan build production            |
+| `build`              | `npm run build`                     | Build ke folder `dist/`              |
+| `migration:run`      | `npm run migration:run`             | Jalankan migrasi                     |
+| `migration:generate` | `npm run migration:generate <path>` | Generate migrasi dari entity         |
+| `migration:create`   | `npm run migration:create <path>`   | Buat file migrasi kosong             |
+| `migration:revert`   | `npm run migration:revert`          | Rollback migrasi terakhir            |
+| `seed:run`           | `npm run seed:run`                  | Jalankan semua seeder                |
+| `lint`               | `npm run lint`                      | Cek kode dengan ESLint               |
+| `format`             | `npm run format`                    | Format kode dengan Prettier          |
+| `test`               | `npm run test`                      | Jalankan unit test                   |
+| `test:e2e`           | `npm run test:e2e`                  | Jalankan end-to-end test             |
+| `test:cov`           | `npm run test:cov`                  | Jalankan test dengan coverage report |
 
 ---
 
@@ -291,46 +292,47 @@ http://localhost:3000/api/docs
 
 ## Environment Variables
 
-| Variable | Required | Default | Keterangan |
-|---|---|---|---|
-| `NODE_ENV` | ✅ | `development` | Environment aplikasi |
-| `PORT` | ✅ | `3000` | Port server |
-| `APP_BASE_URL` | ❌ | `http://localhost:3000` | Digunakan jika mode storage adalah `local` dengan path relatif. |
-| `APP_NAME` | ❌ | `Lumira AI API` | Nama aplikasi |
-| `CORS_ORIGINS` | ❌ | `http://localhost:3000,...` | Origin yang diizinkan (comma-separated) |
-| `DB_HOST` | ✅ | — | Host PostgreSQL |
-| `DB_PORT` | ✅ | — | Port PostgreSQL |
-| `DB_USERNAME` | ✅ | — | Username PostgreSQL |
-| `DB_PASSWORD` | ✅ | — | Password PostgreSQL |
-| `DB_NAME` | ✅ | — | Nama database |
-| `DB_SSL` | ❌ | `false` | Gunakan SSL untuk koneksi DB |
-| `DB_SYNC` | ❌ | `false` | Auto-sync schema (jangan `true` di produksi!) |
-| `DB_LOGGING` | ❌ | `false` | Tampilkan query log TypeORM |
-| `REDIS_HOST` | ✅ | — | Host Redis |
-| `REDIS_PORT` | ✅ | — | Port Redis |
-| `REDIS_PASSWORD` | ❌ | — | Password Redis |
-| `REDIS_TTL` | ❌ | `3600` | TTL cache default (detik) |
-| `MEDGEMMA_PROVIDER_BASE_URL` | ✅ | — | URL endpoint provider MedGemma AI |
-| `MEDGEMMA_PROVIDER_API_KEY` | ✅ | — | API key untuk provider MedGemma |
-| `MEDGEMMA_PROVIDER_MODEL` | ❌ | `medgemma` | Nama model AI yang digunakan |
-| `MEDGEMMA_PROVIDER_TIMEOUT_MS` | ❌ | `30000` | Timeout request ke provider (ms) |
-| `JWT_SECRET` | ✅ | — | Secret key JWT access token |
-| `JWT_EXPIRES_IN` | ✅ | — | Durasi access token (contoh: `15m`) |
-| `JWT_REFRESH_SECRET` | ✅ | — | Secret key JWT refresh token |
-| `JWT_REFRESH_EXPIRES_IN` | ✅ | — | Durasi refresh token (contoh: `7d`) |
-| `OBJECT_STORAGE_MODE` | ❌ | `auto` | `auto` (Cloudinary di prod), `cloudinary`, atau `local` |
-| `CLOUDINARY_CLOUD_NAME` | ❌ | — | Required jika mode `cloudinary` |
-| `CLOUDINARY_API_KEY` | ❌ | — | Required jika mode `cloudinary` |
-| `CLOUDINARY_API_SECRET` | ❌ | — | Required jika mode `cloudinary` |
-| `CLOUDINARY_UPLOAD_FOLDER` | ❌ | `lumira-ai` | Folder penyimpanan di Cloudinary |
-| `MAIL_HOST` | ❌ | — | Host SMTP (opsional) |
-| `MAIL_PORT` | ❌ | — | Port SMTP (opsional) |
-| `MAIL_USER` | ❌ | — | Username SMTP (opsional) |
-| `MAIL_PASSWORD` | ❌ | — | Password SMTP (opsional) |
-| `FIREBASE_ENABLED` | ✅ | `false` | Set `true` untuk mengaktifkan Firestore & FCM |
-| `FIREBASE_PROJECT_ID` | ✅ | — | Firebase project ID dari Service Account |
-| `FIREBASE_CLIENT_EMAIL` | ✅ | — | Client email dari Service Account JSON |
-| `FIREBASE_PRIVATE_KEY` | ✅ | — | Private key dari Service Account JSON |
+| Variable                       | Required | Default                     | Keterangan                                                      |
+| ------------------------------ | -------- | --------------------------- | --------------------------------------------------------------- |
+| `NODE_ENV`                     | ✅       | `development`               | Environment aplikasi                                            |
+| `PORT`                         | ✅       | `3000`                      | Port server                                                     |
+| `APP_BASE_URL`                 | ❌       | `http://localhost:3000`     | Digunakan jika mode storage adalah `local` dengan path relatif. |
+| `APP_NAME`                     | ❌       | `Lumira AI API`             | Nama aplikasi                                                   |
+| `CORS_ORIGINS`                 | ❌       | `http://localhost:3000,...` | Origin yang diizinkan (comma-separated)                         |
+| `DB_HOST`                      | ✅       | —                           | Host PostgreSQL                                                 |
+| `DB_PORT`                      | ✅       | —                           | Port PostgreSQL                                                 |
+| `DB_USERNAME`                  | ✅       | —                           | Username PostgreSQL                                             |
+| `DB_PASSWORD`                  | ✅       | —                           | Password PostgreSQL                                             |
+| `DB_NAME`                      | ✅       | —                           | Nama database                                                   |
+| `DB_SSL`                       | ❌       | `false`                     | Gunakan SSL untuk koneksi DB                                    |
+| `DB_SYNC`                      | ❌       | `false`                     | Auto-sync schema (jangan `true` di produksi!)                   |
+| `DB_LOGGING`                   | ❌       | `false`                     | Tampilkan query log TypeORM                                     |
+| `REDIS_HOST`                   | ✅       | —                           | Host Redis                                                      |
+| `REDIS_PORT`                   | ✅       | —                           | Port Redis                                                      |
+| `REDIS_PASSWORD`               | ❌       | —                           | Password Redis                                                  |
+| `REDIS_TTL`                    | ❌       | `3600`                      | TTL cache default (detik)                                       |
+| `MEDGEMMA_PROVIDER_BASE_URL`   | ✅       | —                           | URL endpoint provider MedGemma AI                               |
+| `MEDGEMMA_PROVIDER_API_KEY`    | ✅       | —                           | API key untuk provider MedGemma                                 |
+| `MEDGEMMA_PROVIDER_MODEL`      | ❌       | `medgemma`                  | Nama model AI yang digunakan                                    |
+| `MEDGEMMA_PROVIDER_TIMEOUT_MS` | ❌       | `30000`                     | Timeout request ke provider (ms)                                |
+| `JWT_SECRET`                   | ✅       | —                           | Secret key JWT access token                                     |
+| `JWT_EXPIRES_IN`               | ✅       | —                           | Durasi access token (contoh: `15m`)                             |
+| `JWT_REFRESH_SECRET`           | ✅       | —                           | Secret key JWT refresh token                                    |
+| `JWT_REFRESH_EXPIRES_IN`       | ✅       | —                           | Durasi refresh token (contoh: `7d`)                             |
+| `OBJECT_STORAGE_MODE`          | ❌       | `auto`                      | `auto` (Cloudinary di prod), `cloudinary`, atau `local`         |
+| `CLOUDINARY_CLOUD_NAME`        | ❌       | —                           | Required jika mode `cloudinary`                                 |
+| `CLOUDINARY_API_KEY`           | ❌       | —                           | Required jika mode `cloudinary`                                 |
+| `CLOUDINARY_API_SECRET`        | ❌       | —                           | Required jika mode `cloudinary`                                 |
+| `CLOUDINARY_UPLOAD_FOLDER`     | ❌       | `lumira-ai`                 | Folder penyimpanan di Cloudinary                                |
+| `MAIL_HOST`                    | ❌       | —                           | Host SMTP (opsional)                                            |
+| `MAIL_PORT`                    | ❌       | —                           | Port SMTP (opsional)                                            |
+| `MAIL_USER`                    | ❌       | —                           | Username SMTP (opsional)                                        |
+| `MAIL_PASSWORD`                | ❌       | —                           | Password SMTP (opsional)                                        |
+| `FIREBASE_ENABLED`             | ✅       | `false`                     | Set `true` untuk mengaktifkan Firestore & FCM                   |
+| `FIREBASE_PROJECT_ID`          | ✅       | —                           | Firebase project ID dari Service Account                        |
+| `FIREBASE_CLIENT_EMAIL`        | ✅       | —                           | Client email dari Service Account JSON                          |
+| `FIREBASE_PRIVATE_KEY`         | ✅       | —                           | Private key dari Service Account JSON                           |
+| `FIREBASE_DATABASE_URL`        | ❌       | —                           | URL Realtime Database                                           |
 
 ---
 
@@ -338,25 +340,24 @@ http://localhost:3000/api/docs
 
 Modul chat menyediakan komunikasi real-time antara **dokter dan pasien** yang terikat pada rekam medis tertentu.
 
-### Arsitektur
+### Arsitektur (Client Direct-Write)
 
-- **PostgreSQL** sebagai _source of truth_ untuk semua pesan dan room.
-- **Firestore** sebagai _mirror_ real-time untuk konsumsi client mobile/web.
-- **FCM (Firebase Cloud Messaging)** untuk push notification ke perangkat penerima.
-- **Outbox Pattern**: setiap event (sync Firestore & kirim FCM) di-enqueue ke tabel `chat_outbox_events` di PostgreSQL terlebih dahulu, lalu diproses secara asinkron — menjamin konsistensi meski ada kegagalan sementara.
+- **Firestore** adalah _single source of truth_ untuk seluruh pesan. Klien Web/Flutter menulis langsung ke `rooms/{roomId}/messages/*` dengan Firebase SDK.
+- **PostgreSQL** hanya menyimpan **metadata** (`chat_rooms`) dan **device_tokens** FCM.
+- **Realtime Database (RTDB)** digunakan untuk presence (`/status/{actorType}/{actorId}`) via `onDisconnect()`.
+- **FCM** dikirim **synchronously** ketika frontend memanggil `POST /chat/rooms/:roomId/notify`; backend membaca ulang pesan di Firestore dan mendistribusikan push.
 
 ### Endpoint Utama
 
-| Method | Path | Keterangan |
-|---|---|---|
-| `POST` | `/chat/rooms` | Buat atau resolve room berdasarkan medical record |
-| `GET` | `/chat/rooms` | Daftar room beserta summary (unread, last message, presence) |
-| `POST` | `/chat/rooms/:id/messages` | Kirim pesan baru |
-| `GET` | `/chat/rooms/:id/messages` | Ambil histori pesan (grouped by date, cursor pagination) |
-| `PUT` | `/chat/rooms/:id/read` | Tandai semua pesan sebagai sudah dibaca |
-| `POST` | `/chat/device-tokens` | Register/refresh FCM token device |
-| `POST` | `/chat/device-tokens/remove` | Nonaktifkan FCM token (logout/ganti device) |
-| `POST` | `/chat/heartbeat` | Update timestamp kehadiran (presence) |
+| Method | Path                         | Keterangan                                                   |
+| ------ | ---------------------------- | ------------------------------------------------------------ |
+| `POST` | `/chat/rooms`                | Buat atau resolve room berdasarkan medical record            |
+| `GET`  | `/chat/rooms`                | Daftar room beserta summary (unread, last message, presence) |
+| `POST` | `/chat/rooms/:id/messages`   | Kirim pesan baru                                             |
+| `GET`  | `/chat/rooms/:id/messages`   | Ambil histori pesan (grouped by date, cursor pagination)     |
+| `PUT`  | `/chat/rooms/:id/read`       | Tandai semua pesan sebagai sudah dibaca                      |
+| `POST` | `/chat/device-tokens`        | Register/refresh FCM token device                            |
+| `POST` | `/chat/device-tokens/remove` | Nonaktifkan FCM token (logout/ganti device)                  |
 
 ### Konfigurasi Firebase
 
@@ -367,7 +368,8 @@ Modul chat menyediakan komunikasi real-time antara **dokter dan pasien** yang te
    - `FIREBASE_CLIENT_EMAIL` ← `client_email`
    - `FIREBASE_PRIVATE_KEY` ← `private_key`
 4. Aktifkan **Firestore Database** dan **Cloud Messaging** di Firebase Console
-```
+
+````
 
 ---
 
@@ -401,7 +403,7 @@ Dapatkan kredensial dari [Cloudinary Dashboard](https://cloudinary.com/console) 
 CLOUDINARY_CLOUD_NAME=xxx
 CLOUDINARY_API_KEY=xxx
 CLOUDINARY_API_SECRET=xxx
-```
+````
 
 ---
 
