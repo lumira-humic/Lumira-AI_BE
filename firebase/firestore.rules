@@ -1,0 +1,162 @@
+rules_version = '2';
+
+// =============================================================================
+// Lumira AI — Firestore Security Rules
+// =============================================================================
+//
+// AUTH MODEL
+//   The NestJS backend mints a Firebase Custom Token for every authenticated
+//   actor. The token's UID is the actor's prefixed ID (e.g. `PAS-123456`,
+//   `DOC-123456`, `ADM-123456`) and a custom claim `actorType` is attached
+//   with the value `"patient"` or `"user"` (which encompasses doctors/admins).
+//
+// COLLECTION TOPOLOGY
+//   /rooms/{roomId}                  — room metadata (backend-only writes)
+//   /rooms/{roomId}/messages/{msgId} — chat messages (client write, validated)
+//   /rooms/{roomId}/read_state/{rid} — per-reader cursor (optional, client write)
+//   /status/{docId}                  — Firestore mirror of presence (server-only)
+//
+// PRESENCE (RTDB)
+//   Realtime presence lives in RTDB at /status/{actorType}/{actorId} via
+//   onDisconnect(); see `database.rules.json`. Firestore /status is a backend
+//   mirror only.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── helpers ────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isActorSelf(actorId) {
+      return isSignedIn() && request.auth.uid == actorId;
+    }
+
+    function getRoom(roomId) {
+      return get(/databases/$(database)/documents/rooms/$(roomId)).data;
+    }
+
+    function roomExists(roomId) {
+      return exists(/databases/$(database)/documents/rooms/$(roomId));
+    }
+
+    function isRoomMemberByData(roomData) {
+      return isSignedIn()
+        && (roomData.patient_id == request.auth.uid
+            || roomData.doctor_id == request.auth.uid);
+    }
+
+    function isRoomMember(roomId) {
+      return roomExists(roomId) && isRoomMemberByData(getRoom(roomId));
+    }
+
+    // Resolve sender_type from the room participants. Returns 'patient' if the
+    // caller is the patient_id of the room, 'doctor' if doctor_id, else ''.
+    function expectedSenderType(roomData) {
+      return roomData.patient_id == request.auth.uid ? 'patient'
+           : (roomData.doctor_id == request.auth.uid ? 'doctor' : '');
+    }
+
+    // The "other" participant given the caller is one of them.
+    function expectedReceiverId(roomData) {
+      return roomData.patient_id == request.auth.uid
+        ? roomData.doctor_id
+        : roomData.patient_id;
+    }
+
+    // ─── /rooms/{roomId} ────────────────────────────────────────────────────
+
+    match /rooms/{roomId} {
+      // Read: only participants of the room (compared against doc data).
+      allow read: if isRoomMemberByData(resource.data);
+
+      // Write: backend-only via Admin SDK (bypasses rules).
+      allow write: if false;
+
+      // ─── /rooms/{roomId}/messages/{messageId} ────────────────────────────
+      //
+      // CREATE (client direct-write):
+      //   - Caller must be a room member.
+      //   - sender_id must be the caller's UID.
+      //   - sender_type must match the caller's role within this room
+      //     (patient_id → 'patient', doctor_id → 'doctor').
+      //   - receiver_id must be the OTHER participant.
+      //   - message must be a non-empty string ≤ 5000 chars.
+      //   - is_read must start `false` (read receipts flip later via update).
+      //   - room_id and message_id must mirror the path.
+      //   - created_at must be the server timestamp (so clients can't backdate).
+      //
+      // UPDATE (read receipts only):
+      //   - Only the receiver may flip `is_read` from `false` to `true` and
+      //     set `read_at`. No other field is mutable.
+      //
+      // DELETE: never.
+      // ─────────────────────────────────────────────────────────────────────
+      match /messages/{messageId} {
+        allow read: if isRoomMember(roomId);
+
+        allow create: if isRoomMember(roomId)
+          && request.resource.data.keys().hasOnly([
+              'message_id', 'room_id',
+              'patient_id', 'doctor_id',
+              'sender_type', 'sender_id', 'receiver_id',
+              'message', 'is_read', 'client_message_id', 'created_at'
+            ])
+          && request.resource.data.message_id == messageId
+          && request.resource.data.room_id == roomId
+          && request.resource.data.patient_id == getRoom(roomId).patient_id
+          && request.resource.data.doctor_id == getRoom(roomId).doctor_id
+          && request.resource.data.sender_id == request.auth.uid
+          && request.resource.data.sender_type == expectedSenderType(getRoom(roomId))
+          && request.resource.data.receiver_id == expectedReceiverId(getRoom(roomId))
+          && request.resource.data.receiver_id != request.auth.uid
+          && request.resource.data.message is string
+          && request.resource.data.message.size() > 0
+          && request.resource.data.message.size() <= 5000
+          && request.resource.data.is_read == false
+          && request.resource.data.created_at == request.time
+          && (
+              !('client_message_id' in request.resource.data.keys())
+              || request.resource.data.client_message_id == null
+              || (request.resource.data.client_message_id is string
+                  && request.resource.data.client_message_id.size() <= 128)
+            );
+
+        // Read-receipt: receiver flips is_read false→true and sets read_at.
+        allow update: if isRoomMember(roomId)
+          && resource.data.receiver_id == request.auth.uid
+          && resource.data.is_read == false
+          && request.resource.data.is_read == true
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['is_read', 'read_at'])
+          && request.resource.data.read_at == request.time;
+
+        allow delete: if false;
+      }
+
+      // ─── /rooms/{roomId}/read_state/{readerId} ───────────────────────────
+      //
+      // Optional per-reader cursor (last_read_message_id, last_read_at) so the
+      // client can persist scroll position / unread counters across devices.
+      // Each reader writes only their own document.
+      match /read_state/{readerId} {
+        allow read: if isRoomMember(roomId);
+        allow create, update: if isRoomMember(roomId)
+          && isActorSelf(readerId)
+          && request.resource.data.reader_id == request.auth.uid
+          && request.resource.data.room_id == roomId;
+        allow delete: if false;
+      }
+    }
+
+    // ─── /status/{docId} (Firestore presence mirror, server-only) ──────────
+
+    match /status/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+  }
+}

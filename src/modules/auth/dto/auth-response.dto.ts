@@ -1,7 +1,7 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
 
-import { UserResponseDto } from '../../users/dto/user-response.dto';
 import { PatientResponseDto } from '../../patients/dto/patient-response.dto';
+import { UserResponseDto } from '../../users/dto/user-response.dto';
 
 /**
  * Response DTO returned after successful login or registration.
@@ -31,6 +31,14 @@ export class AuthResponseDto {
     oneOf: [{ $ref: getSchemaPath(UserResponseDto) }, { $ref: getSchemaPath(PatientResponseDto) }],
   })
   user!: UserResponseDto | PatientResponseDto;
+
+  @ApiProperty({
+    example: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description:
+      'Firebase custom token where uid equals actor id (null when Firebase integration is disabled)',
+    nullable: true,
+  })
+  firebaseCustomToken!: string | null;
 }
 
 /**
@@ -42,4 +50,12 @@ export class AccessTokenResponseDto {
     description: 'Newly issued access token',
   })
   accessToken!: string;
+
+  @ApiProperty({
+    example: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description:
+      'Firebase custom token where uid equals actor id (null when Firebase integration is disabled)',
+    nullable: true,
+  })
+  firebaseCustomToken!: string | null;
 }

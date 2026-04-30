@@ -9,6 +9,7 @@ import * as jwt from 'jsonwebtoken';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { AppException } from '../../common/exceptions/base.exception';
 
+import { FirebaseAdminService } from '../chat/firebase-admin.service';
 import { PatientResponseDto } from '../patients/dto/patient-response.dto';
 import { Patient } from '../patients/entities/patient.entity';
 import { PatientsRepository } from '../patients/patients.repository';
@@ -42,6 +43,7 @@ export class AuthService {
     private readonly patientsRepository: PatientsRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly firebaseAdminService: FirebaseAdminService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
@@ -68,6 +70,7 @@ export class AuthService {
     };
 
     const tokens = await this.generateTokens(payload);
+    const firebaseCustomToken = await this.issueFirebaseCustomToken(payload);
 
     // Store refresh token in Redis with 7-day TTL
     await this.cacheManager.set(
@@ -87,6 +90,7 @@ export class AuthService {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       user: userDto,
+      firebaseCustomToken,
     };
   }
 
@@ -229,10 +233,14 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(accessPayload);
+    const firebaseCustomToken = await this.issueFirebaseCustomToken(accessPayload);
 
     this.logger.log(`Token refreshed for ${decoded.actorType}:${decoded.sub}`);
 
-    return { accessToken };
+    return {
+      accessToken,
+      firebaseCustomToken,
+    };
   }
 
   /**
@@ -290,6 +298,31 @@ export class AuthService {
     ]);
 
     return { accessToken, refreshToken };
+  }
+
+  /**
+   * Issue Firebase custom token using actor id as Firebase uid.
+   */
+  private async issueFirebaseCustomToken(payload: JwtPayload): Promise<string | null> {
+    if (!this.firebaseAdminService.isEnabled()) {
+      return null;
+    }
+
+    try {
+      return await this.firebaseAdminService.createCustomToken(payload.sub, {
+        actorType: payload.actorType,
+        role: payload.role,
+        email: payload.email,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to issue Firebase custom token for ${payload.sub}: ${message}`);
+      throw new AppException(
+        ErrorCode.INTERNAL_SERVER_ERROR,
+        'Failed to issue Firebase custom token',
+        500,
+      );
+    }
   }
 
   /**

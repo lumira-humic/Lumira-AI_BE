@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { App, applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
+import { Auth, getAuth } from 'firebase-admin/auth';
+import { Database, getDatabase } from 'firebase-admin/database';
 import { Firestore, getFirestore } from 'firebase-admin/firestore';
 import { getMessaging, Messaging } from 'firebase-admin/messaging';
 
@@ -23,6 +25,7 @@ export class FirebaseAdminService {
     const projectId = this.configService.get<string>('firebase.projectId', '');
     const clientEmail = this.configService.get<string>('firebase.clientEmail', '');
     const privateKey = this.configService.get<string>('firebase.privateKey', '');
+    const databaseUrl = this.configService.get<string>('firebase.databaseUrl', '');
 
     const existingApp = getApps()[0];
     if (existingApp) {
@@ -37,6 +40,7 @@ export class FirebaseAdminService {
       this.app = initializeApp({
         credential: applicationDefault(),
         ...(projectId ? { projectId } : {}),
+        ...(databaseUrl ? { databaseURL: databaseUrl } : {}),
       });
       return;
     }
@@ -48,6 +52,7 @@ export class FirebaseAdminService {
         privateKey,
       }),
       projectId,
+      ...(databaseUrl ? { databaseURL: databaseUrl } : {}),
     });
   }
 
@@ -69,5 +74,30 @@ export class FirebaseAdminService {
     }
 
     return getFirestore(this.app);
+  }
+
+  getAuth(): Auth | null {
+    if (!this.app) {
+      return null;
+    }
+
+    return getAuth(this.app);
+  }
+
+  getDatabase(): Database | null {
+    if (!this.app) {
+      return null;
+    }
+
+    return getDatabase(this.app);
+  }
+
+  async createCustomToken(uid: string, claims?: Record<string, unknown>): Promise<string | null> {
+    const auth = this.getAuth();
+    if (!auth) {
+      return null;
+    }
+
+    return auth.createCustomToken(uid, claims);
   }
 }

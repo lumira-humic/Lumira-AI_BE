@@ -1,23 +1,9 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Headers,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-  Put,
-  Query,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
-  ApiExcludeEndpoint,
   ApiOperation,
   ApiParam,
-  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -26,30 +12,52 @@ import { ResponseHelper } from '../../common/helpers/response.helper';
 import { ApiResponse as ApiResponseType } from '../../common/interfaces/api-response.interface';
 
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Public } from '../auth/decorators/public.decorator';
 import { Patient } from '../patients/entities/patient.entity';
 import { User } from '../users/entities/user.entity';
+
 import { ChatService } from './chat.service';
 import {
-  ChatHistoryGroupDto,
-  ChatMessageDto,
   ChatRoomDto,
   ChatRoomSummaryDto,
   CreateChatRoomDto,
-  QueryChatHistoryDto,
+  FirebaseTokenDto,
+  NotifyChatMessageDto,
   RegisterDeviceTokenDto,
   RemoveDeviceTokenDto,
-  SendChatMessageDto,
 } from './dto';
 
-/**
- * Controller for doctor-patient chat communication.
- */
+type AuthActor = (User | Patient) & { actorType: 'user' | 'patient' };
+
 @ApiTags('Chat')
 @ApiBearerAuth('BearerAuth')
 @Controller('chat')
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
+
+  // ---------------------------------------------------------------------------
+  // POST /chat/firebase-token
+  // ---------------------------------------------------------------------------
+
+  @Post('firebase-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mint a short-lived Firebase Custom Token for the authenticated actor',
+    description:
+      'Returns a Firebase custom token (UID = actor.id, claim `actorType`) that the client SDK ' +
+      'must consume via `signInWithCustomToken()` before reading/writing Firestore messages or ' +
+      'updating RTDB presence. The token expires in 3600 seconds (Firebase hard limit); the ' +
+      'client should re-mint before that.',
+  })
+  @ApiResponse({ status: 200, description: 'Custom token minted.', type: FirebaseTokenDto })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @ApiResponse({
+    status: 503,
+    description: 'Firebase is not configured (FIREBASE_ENABLED=false on server).',
+  })
+  async firebaseToken(@CurrentUser() actor: AuthActor): Promise<ApiResponseType<FirebaseTokenDto>> {
+    const result = await this.chatService.mintFirebaseToken(actor);
+    return ResponseHelper.success(result, 'Firebase custom token minted');
+  }
 
   // ---------------------------------------------------------------------------
   // POST /chat/rooms
@@ -58,23 +66,20 @@ export class ChatController {
   @Post('rooms')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Create or resolve chat room',
+    summary: 'Create or resolve a chat room for a medical record',
     description:
-      'Creates a new chat room tied to a medical record when one does not yet exist, or returns the existing room. ' +
-      'Each room is uniquely identified by the (patientId, doctorId, medicalRecordId) triplet. ' +
-      '`medicalRecordId` is mandatory. When called by a Patient actor, `doctorId` is also required.',
+      'Each room is uniquely identified by `medical_record_id`. Backend persists the room in ' +
+      'Postgres and mirrors the room metadata to Firestore so the client SDK can read & write ' +
+      'messages within `rooms/{roomId}/messages/*`. If the room already exists for this ' +
+      'medical record, the existing one is returned (idempotent).',
   })
   @ApiBody({ type: CreateChatRoomDto })
-  @ApiResponse({
-    status: 201,
-    description: 'Chat room created or returned successfully.',
-    type: ChatRoomDto,
-  })
-  @ApiResponse({ status: 400, description: 'Bad request — missing required fields.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid JWT.' })
-  @ApiResponse({ status: 422, description: 'Validation error — invalid field values.' })
+  @ApiResponse({ status: 201, description: 'Room ready (created or resolved).', type: ChatRoomDto })
+  @ApiResponse({ status: 400, description: 'Validation error.' })
+  @ApiResponse({ status: 403, description: 'Forbidden.' })
+  @ApiResponse({ status: 404, description: 'Patient/Doctor/MedicalRecord not found.' })
   async createRoom(
-    @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
+    @CurrentUser() actor: AuthActor,
     @Body() dto: CreateChatRoomDto,
   ): Promise<ApiResponseType<ChatRoomDto>> {
     const result = await this.chatService.createRoom(actor, dto);
@@ -87,32 +92,52 @@ export class ChatController {
 
   @Get('rooms')
   @ApiOperation({
-    summary: 'List room summaries for current actor',
+    summary: 'List rooms for the authenticated actor',
     description:
-      'Returns UI-ready room list including counterpart profile, unread message count, ' +
-      'the latest message preview, and the associated medical record ID. ' +
-      'On Vercel deployments, this endpoint also opportunistically drains the outbox queue ' +
-      '(piggyback processing).',
+      'Returns slim room summaries (ID, participants, counterpart name, medical_record_id). ' +
+      'Realtime fields like `unreadCount`, `lastMessage`, and `counterpartPresence` are computed ' +
+      'CLIENT-SIDE via Firestore `onSnapshot()` and RTDB presence listeners — this endpoint does ' +
+      'not touch Firestore (zero quota cost) so it stays fast on Vercel Hobby.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Array of room summaries for the authenticated actor.',
+    description: 'Array of room summaries.',
     type: ChatRoomSummaryDto,
     isArray: true,
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid JWT.' })
   async listRoomSummaries(
-    @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
+    @CurrentUser() actor: AuthActor,
   ): Promise<ApiResponseType<ChatRoomSummaryDto[]>> {
     const result = await this.chatService.listRoomSummaries(actor);
-
-    if (process.env.VERCEL === '1') {
-      void this.chatService
-        .processOutbox()
-        .catch((e) => console.error('Piggyback outbox error:', e));
-    }
-
     return ResponseHelper.success(result, 'Chat rooms');
+  }
+
+  // ---------------------------------------------------------------------------
+  // POST /chat/rooms/:roomId/notify
+  // ---------------------------------------------------------------------------
+
+  @Post('rooms/:roomId/notify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Dispatch FCM push for a just-written Firestore message',
+    description:
+      'Call this AFTER the client SDK has successfully written the message document to Firestore. ' +
+      'Backend re-reads the message from Firestore (anti-spoof), verifies the caller is the ' +
+      "actual sender, and dispatches FCM to the receiver's active devices. Idempotent and " +
+      'best-effort — call as fire-and-forget.',
+  })
+  @ApiParam({ name: 'roomId', example: 'CHR-123456' })
+  @ApiBody({ type: NotifyChatMessageDto })
+  @ApiResponse({ status: 200, description: 'FCM dispatch attempted.' })
+  @ApiResponse({ status: 403, description: 'Caller is not the sender of that message.' })
+  @ApiResponse({ status: 404, description: 'Room or message not found.' })
+  async notifyChatMessage(
+    @CurrentUser() actor: AuthActor,
+    @Param('roomId') roomId: string,
+    @Body() dto: NotifyChatMessageDto,
+  ): Promise<ApiResponseType<{ delivered: number; deactivated: number }>> {
+    const result = await this.chatService.notifyChatMessage(actor, roomId, dto);
+    return ResponseHelper.success(result, 'Notification dispatched');
   }
 
   // ---------------------------------------------------------------------------
@@ -124,16 +149,13 @@ export class ChatController {
   @ApiOperation({
     summary: 'Register or refresh FCM device token',
     description:
-      "Stores or updates the FCM registration token for the calling actor's device so that " +
-      'push notifications can be delivered. If the same token is already registered, ' +
-      'the record is refreshed (upserted).',
+      "Stores or refreshes the FCM registration token for the calling actor's device so push " +
+      'notifications can be delivered when the app is offline.',
   })
   @ApiBody({ type: RegisterDeviceTokenDto })
-  @ApiResponse({ status: 201, description: 'Device token registered or refreshed successfully.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid JWT.' })
-  @ApiResponse({ status: 422, description: 'Validation error — invalid token or platform value.' })
+  @ApiResponse({ status: 201, description: 'Token registered.' })
   async registerDeviceToken(
-    @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
+    @CurrentUser() actor: AuthActor,
     @Body() dto: RegisterDeviceTokenDto,
   ): Promise<ApiResponseType<null>> {
     await this.chatService.registerDeviceToken(actor, dto);
@@ -147,304 +169,18 @@ export class ChatController {
   @Post('device-tokens/remove')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Deactivate FCM device token',
+    summary: 'Deactivate an FCM device token',
     description:
-      'Marks the given FCM token as inactive for the current actor. ' +
-      'Should be called on logout or when switching devices to stop push notifications ' +
-      'to the old token.',
+      'Should be called on logout or when uninstalling. Marks the given FCM token as inactive ' +
+      'for the current actor.',
   })
   @ApiBody({ type: RemoveDeviceTokenDto })
-  @ApiResponse({ status: 200, description: 'Device token deactivated successfully.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid JWT.' })
-  @ApiResponse({ status: 422, description: 'Validation error — invalid token value.' })
+  @ApiResponse({ status: 200, description: 'Token deactivated.' })
   async removeDeviceToken(
-    @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
+    @CurrentUser() actor: AuthActor,
     @Body() dto: RemoveDeviceTokenDto,
   ): Promise<ApiResponseType<null>> {
     await this.chatService.removeDeviceToken(actor, dto);
     return ResponseHelper.success(null, 'Device token removed');
-  }
-
-  // ---------------------------------------------------------------------------
-  // POST /chat/heartbeat
-  // ---------------------------------------------------------------------------
-
-  @Post('heartbeat')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Send presence heartbeat',
-    description:
-      'Updates the `lastSeenAt` timestamp for the current actor. ' +
-      'Clients should call this endpoint periodically (e.g., every 30–60 seconds) ' +
-      'while the chat screen is in focus so that counterparts see an accurate presence status.',
-  })
-  @ApiResponse({ status: 200, description: 'Heartbeat acknowledged — lastSeenAt updated.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid JWT.' })
-  async heartbeat(
-    @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
-  ): Promise<ApiResponseType<null>> {
-    await this.chatService.heartbeat(actor);
-    return ResponseHelper.success(null, 'Heartbeat acknowledged');
-  }
-
-  // ---------------------------------------------------------------------------
-  // GET /chat/rooms/:room_id/messages
-  // ---------------------------------------------------------------------------
-
-  @Get('rooms/:room_id/messages')
-  @ApiOperation({
-    summary: 'Get chat history grouped by date',
-    description:
-      'Retrieves messages for a room, grouped by UTC date (YYYY-MM-DD) with cursor-based ' +
-      'pagination. Use `before` or `after` for bi-directional pagination. ' +
-      'Only the actor who is a participant of the room (patientId or doctorId) may access it. ' +
-      'On Vercel deployments, this endpoint also opportunistically drains the outbox queue ' +
-      '(piggyback processing).',
-  })
-  @ApiParam({
-    name: 'room_id',
-    type: String,
-    description: 'Chat room ID (e.g. CHR-123456).',
-    example: 'CHR-123456',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Number of messages to return per group. Default: 20. Min: 1. Max: 100.',
-    example: 20,
-  })
-  @ApiQuery({
-    name: 'before',
-    required: false,
-    type: String,
-    description: 'Return messages strictly before this ISO 8601 timestamp (cursor pagination).',
-    example: '2026-04-24T08:00:00.000Z',
-  })
-  @ApiQuery({
-    name: 'after',
-    required: false,
-    type: String,
-    description: 'Return messages strictly after this ISO 8601 timestamp (cursor pagination).',
-    example: '2026-04-24T07:00:00.000Z',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Chat history returned and grouped by UTC date.',
-    type: ChatHistoryGroupDto,
-    isArray: true,
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid JWT.' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden — caller is not a participant of this room.',
-  })
-  @ApiResponse({ status: 404, description: 'Chat room not found.' })
-  async getChatHistory(
-    @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
-    @Param('room_id') roomId: string,
-    @Query() query: QueryChatHistoryDto,
-  ): Promise<ApiResponseType<ChatHistoryGroupDto[]>> {
-    const result = await this.chatService.getChatHistoryGroupedByDate(actor, roomId, query);
-
-    if (process.env.VERCEL === '1') {
-      void this.chatService
-        .processOutbox()
-        .catch((e) => console.error('Piggyback outbox error:', e));
-    }
-
-    return ResponseHelper.success(result, 'Chat history');
-  }
-
-  // ---------------------------------------------------------------------------
-  // POST /chat/rooms/:room_id/messages
-  // ---------------------------------------------------------------------------
-
-  @Post('rooms/:room_id/messages')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({
-    summary: 'Send a new chat message',
-    description:
-      'Sends a message to the specified room and triggers an FCM push notification to ' +
-      "the receiver's registered devices. The `clientMessageId` field can be used as an " +
-      'idempotency key to prevent duplicate messages on client retries. ' +
-      'Only room participants (patientId or doctorId) may send.',
-  })
-  @ApiParam({
-    name: 'room_id',
-    type: String,
-    description: 'Chat room ID (e.g. CHR-123456).',
-    example: 'CHR-123456',
-  })
-  @ApiBody({ type: SendChatMessageDto })
-  @ApiResponse({
-    status: 201,
-    description: 'Message sent successfully.',
-    type: ChatMessageDto,
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid JWT.' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden — caller is not a participant of this room.',
-  })
-  @ApiResponse({ status: 404, description: 'Chat room not found.' })
-  @ApiResponse({
-    status: 422,
-    description: 'Validation error — message too long (max 5 000 chars).',
-  })
-  async sendMessage(
-    @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
-    @Param('room_id') roomId: string,
-    @Body() dto: SendChatMessageDto,
-  ): Promise<ApiResponseType<ChatMessageDto>> {
-    const result = await this.chatService.sendMessage(actor, roomId, dto);
-    return ResponseHelper.success(result, 'Message sent', HttpStatus.CREATED);
-  }
-
-  // ---------------------------------------------------------------------------
-  // PUT /chat/rooms/:room_id/read
-  // ---------------------------------------------------------------------------
-
-  @Put('rooms/:room_id/read')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Mark all room messages as read',
-    description:
-      'Marks every unread message in the specified room as read for the current actor. ' +
-      'Returns the total number of messages that were updated.',
-  })
-  @ApiParam({
-    name: 'room_id',
-    type: String,
-    description: 'Chat room ID (e.g. CHR-123456).',
-    example: 'CHR-123456',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Messages marked as read. Response `data` contains `{ updated: number }`.',
-    schema: {
-      allOf: [
-        {
-          type: 'object',
-          properties: {
-            status: { type: 'string', example: 'success' },
-            statusCode: { type: 'number', example: 200 },
-            message: { type: 'string', example: 'Messages marked as read' },
-            data: {
-              type: 'object',
-              properties: {
-                updated: {
-                  type: 'number',
-                  example: 5,
-                  description: 'Number of messages that were marked as read.',
-                },
-              },
-              required: ['updated'],
-            },
-          },
-        },
-      ],
-    },
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid JWT.' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden — caller is not a participant of this room.',
-  })
-  @ApiResponse({ status: 404, description: 'Chat room not found.' })
-  async markRoomAsRead(
-    @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
-    @Param('room_id') roomId: string,
-  ): Promise<ApiResponseType<{ updated: number }>> {
-    const updated = await this.chatService.markRoomAsRead(actor, roomId);
-    return ResponseHelper.success({ updated }, 'Messages marked as read');
-  }
-
-  // ---------------------------------------------------------------------------
-  // PUT /chat/rooms/:room_id/messages/:message_id/read
-  // ---------------------------------------------------------------------------
-
-  @Put('rooms/:room_id/messages/:message_id/read')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Mark single message as read',
-    description: 'Marks a single unread message as read for the current actor. ',
-  })
-  @ApiParam({
-    name: 'room_id',
-    type: String,
-    description: 'Chat room ID (e.g. CHR-123456).',
-    example: 'CHR-123456',
-  })
-  @ApiParam({
-    name: 'message_id',
-    type: String,
-    description: 'Chat message ID (e.g. CHM-123456).',
-    example: 'CHM-123456',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Message read status updated.',
-    schema: {
-      allOf: [
-        {
-          type: 'object',
-          properties: {
-            status: { type: 'string', example: 'success' },
-            statusCode: { type: 'number', example: 200 },
-            message: { type: 'string', example: 'Message marked as read' },
-            data: {
-              type: 'object',
-              properties: {
-                updated: {
-                  type: 'number',
-                  example: 1,
-                  description: 'Number of messages that were marked as read (0 or 1).',
-                },
-              },
-              required: ['updated'],
-            },
-          },
-        },
-      ],
-    },
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid JWT.' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden — caller cannot mark message as read.',
-  })
-  @ApiResponse({ status: 404, description: 'Chat room or message not found.' })
-  async markMessageAsRead(
-    @CurrentUser() actor: (User | Patient) & { actorType: 'user' | 'patient' },
-    @Param('room_id') roomId: string,
-    @Param('message_id') messageId: string,
-  ): Promise<ApiResponseType<{ updated: number }>> {
-    const updated = await this.chatService.markMessageAsRead(actor, roomId, messageId);
-    return ResponseHelper.success({ updated }, 'Message marked as read');
-  }
-
-  // ---------------------------------------------------------------------------
-  // GET /chat/cron/process-outbox  (Public — Vercel Cron only, hidden from docs)
-  // ---------------------------------------------------------------------------
-
-  @Get('cron/process-outbox')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @ApiExcludeEndpoint()
-  async processOutboxCron(
-    @Headers('authorization') authHeader?: string,
-  ): Promise<ApiResponseType<string>> {
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (
-      process.env.NODE_ENV === 'production' &&
-      (!cronSecret || authHeader !== `Bearer ${cronSecret}`)
-    ) {
-      throw new UnauthorizedException('Invalid cron secret');
-    }
-
-    await this.chatService.processOutbox();
-    return ResponseHelper.success('Processed', 'Outbox checking initiated');
   }
 }
