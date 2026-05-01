@@ -30,4 +30,13 @@ export class MedGemmaConsultDto {
   })
   @IsEnum(['doctor', 'patient'])
   role!: 'doctor' | 'patient';
+
+  @ApiPropertyOptional({
+    description: 'Optional medical image file for analysis (multipart/form-data)',
+    type: 'string',
+    format: 'binary',
+  })
+  @IsOptional()
+  @IsString()
+  image?: string;
 }

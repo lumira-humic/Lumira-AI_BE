@@ -38,8 +38,8 @@ export class MedGemmaResponseDto {
   role!: 'doctor' | 'patient';
 
   @ApiProperty({
-    description: 'Conversation title auto-generated from AI response',
-    example: 'Kemungkinan utama adalah angina stabil, namun perlu skrining red flags kardiak',
+    description: 'Conversation title defaulted when AI title is not provided',
+    example: 'untitled',
     nullable: true,
   })
   title!: string | null;
@@ -117,7 +117,7 @@ export class MedGemmaSessionConversationDto {
 
   @ApiProperty({
     description: 'Conversation title used to identify this session',
-    example: 'Gerd akan kambuh kalo minum kopi',
+    example: 'untitled',
     nullable: true,
   })
   title!: string | null;
