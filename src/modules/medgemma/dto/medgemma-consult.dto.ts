@@ -1,19 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEnum, IsOptional, IsUrl } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsOptional } from 'class-validator';
 
 /**
  * DTO for MedGemma AI consultation request.
  */
 export class MedGemmaConsultDto {
-  @ApiPropertyOptional({
-    description:
-      'Client session identifier. If omitted, server will create a new stateless session id.',
-    example: '90e73057-9959-4acd-a80e-26f1780f81f5',
-  })
-  @IsOptional()
-  @IsString()
-  session_id?: string;
-
   @ApiPropertyOptional({
     description: 'Legacy alias for user_prompt. Prefer user_prompt for new clients.',
     example: 'What are the signs of a malignant tumor?',
@@ -41,11 +32,11 @@ export class MedGemmaConsultDto {
   role!: 'doctor' | 'patient';
 
   @ApiPropertyOptional({
-    description: 'URL tautan gambar pendukung (JPEG, PNG, WEBP; maks 5MB di provider)',
-    example: 'https://storage.example.com/medical-images/rontgen-paru-123.jpg',
+    description: 'Optional medical image file for analysis (multipart/form-data)',
+    type: 'string',
+    format: 'binary',
   })
   @IsOptional()
-  @IsUrl({ require_tld: false })
   @IsString()
   image?: string;
 }

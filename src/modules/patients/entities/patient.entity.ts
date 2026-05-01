@@ -3,7 +3,6 @@ import { Column, Entity, OneToMany } from 'typeorm';
 
 import { BaseEntity } from '../../../common/entities/base.entity';
 
-import { ChatMessage } from '../../chat/entities/chat-message.entity';
 import { MedicalRecord } from '../../medical-records/entities/medical-record.entity';
 
 /**
@@ -45,8 +44,4 @@ export class Patient extends BaseEntity {
   /** Medical records belonging to this patient. */
   @OneToMany(() => MedicalRecord, (record) => record.patient)
   medicalRecords!: MedicalRecord[];
-
-  /** Chat messages involving this patient. */
-  @OneToMany(() => ChatMessage, (message) => message.patient)
-  chatMessages!: ChatMessage[];
 }

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 
+import { FirebaseAdminService } from '../chat/firebase-admin.service';
 import { PatientsRepository } from '../patients/patients.repository';
 import { UsersRepository } from '../users/users.repository';
 import { AuthService } from './auth.service';
@@ -31,6 +32,10 @@ describe('AuthService', () => {
     verify: jest.Mock;
   };
   let cacheManager: Record<string, jest.Mock>;
+  let firebaseAdminService: {
+    isEnabled: jest.Mock;
+    createCustomToken: jest.Mock;
+  };
 
   beforeEach(async () => {
     usersRepository = {
@@ -65,6 +70,11 @@ describe('AuthService', () => {
       del: jest.fn(),
     };
 
+    firebaseAdminService = {
+      isEnabled: jest.fn().mockReturnValue(true),
+      createCustomToken: jest.fn().mockResolvedValue('mock-firebase-custom-token'),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -85,6 +95,7 @@ describe('AuthService', () => {
             }),
           },
         },
+        { provide: FirebaseAdminService, useValue: firebaseAdminService },
         { provide: CACHE_MANAGER, useValue: cacheManager },
       ],
     }).compile();
@@ -115,6 +126,7 @@ describe('AuthService', () => {
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
       expect(result).toHaveProperty('user');
+      expect(result.firebaseCustomToken).toBe('mock-firebase-custom-token');
       expect(cacheManager.set).toHaveBeenCalled();
     });
 
@@ -134,6 +146,7 @@ describe('AuthService', () => {
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
       expect(result).toHaveProperty('user');
+      expect(result.firebaseCustomToken).toBe('mock-firebase-custom-token');
     });
   });
 

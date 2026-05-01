@@ -38,6 +38,13 @@ export class MedGemmaResponseDto {
   role!: 'doctor' | 'patient';
 
   @ApiProperty({
+    description: 'Conversation title defaulted when AI title is not provided',
+    example: 'untitled',
+    nullable: true,
+  })
+  title!: string | null;
+
+  @ApiProperty({
     description: 'AI-generated response text',
     example:
       'Based on the clinical evidence, malignant tumors typically show: irregular borders, heterogeneous echogenicity, hypoechoic structure, increased vascularity on Doppler...',
@@ -107,6 +114,13 @@ export class MedGemmaSessionConversationDto {
     example: 'patient',
   })
   role!: 'doctor' | 'patient';
+
+  @ApiProperty({
+    description: 'Conversation title used to identify this session',
+    example: 'untitled',
+    nullable: true,
+  })
+  title!: string | null;
 
   @ApiProperty({
     example: '2026-04-23T12:00:00.000Z',

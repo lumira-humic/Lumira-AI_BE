@@ -58,14 +58,14 @@ export class MedGemmaService {
   /**
    * Process user query through MedGemma AI.
    */
-  async consult(dto: MedGemmaConsultDto, role: MedGemmaRole): Promise<MedGemmaResponseDto> {
-    const sessionId =
-      typeof dto.session_id === 'string' && dto.session_id.trim().length > 0
-        ? dto.session_id
-        : randomUUID();
+  async consult(
+    dto: MedGemmaConsultDto,
+    role: MedGemmaRole,
+    imageData?: string,
+  ): Promise<MedGemmaResponseDto> {
+    const sessionId = randomUUID();
     const userPrompt = this.resolveUserPrompt(dto);
-
-    await this.upsertSession(sessionId, role);
+    await this.upsertSession(sessionId, role, null);
 
     const history = await this.getRecentMessages(sessionId, HISTORY_WINDOW_SIZE);
 
@@ -74,8 +74,10 @@ export class MedGemmaService {
       role,
       sessionId,
       history,
-      dto.image,
+      imageData,
     );
+    const generatedTitle = this.resolveSessionTitle(aiResult.response);
+    await this.upsertSession(sessionId, role, generatedTitle);
 
     const now = new Date();
     await this.messageRepo.save([
@@ -100,6 +102,7 @@ export class MedGemmaService {
     return {
       session_id: sessionId,
       role,
+      title: generatedTitle,
       response: aiResult.response,
       profiling: {
         latency_seconds: Number(aiResult.profiling.latency_seconds),
@@ -131,6 +134,7 @@ export class MedGemmaService {
     return sessions.map((session) => ({
       session_id: session.id,
       role: session.role as MedGemmaRole,
+      title: session.title,
       created_at: session.created_at.toISOString(),
       updated_at: session.updated_at.toISOString(),
       messages: (session.messages ?? []).map((message) => this.toChatMessageDto(message)),
@@ -141,10 +145,14 @@ export class MedGemmaService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  private async upsertSession(sessionId: string, role: MedGemmaRole): Promise<void> {
+  private async upsertSession(
+    sessionId: string,
+    role: MedGemmaRole,
+    title: string | null,
+  ): Promise<void> {
     const existing = await this.sessionRepo.findOne({ where: { id: sessionId } });
     if (!existing) {
-      await this.sessionRepo.save(this.sessionRepo.create({ id: sessionId, role }));
+      await this.sessionRepo.save(this.sessionRepo.create({ id: sessionId, role, title }));
       return;
     }
 
@@ -154,6 +162,10 @@ export class MedGemmaService {
         'Session role does not match authenticated actor role',
         403,
       );
+    }
+
+    if (!existing.title && title) {
+      existing.title = title;
     }
 
     existing.updated_at = new Date();
@@ -274,6 +286,10 @@ export class MedGemmaService {
     }
 
     return prompt;
+  }
+
+  private resolveSessionTitle(_aiResponse: string): string {
+    return 'untitled';
   }
 
   private toProviderUser(role: MedGemmaRole): 'Doctor' | 'Patient' {
