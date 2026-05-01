@@ -1,4 +1,4 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 
 import { BaseEntity } from '../../../common/entities/base.entity';
 
@@ -14,6 +14,7 @@ import { ValidationStatus } from '../enums/validation-status.enum';
 @Index(['patientId'])
 @Index(['validationStatus'])
 @Index(['validatorId'])
+@Index(['parentRecordId'])
 export class MedicalRecord extends BaseEntity {
   /** Foreign key to the owning patient. */
   @Column({ name: 'patient_id' })
@@ -26,6 +27,15 @@ export class MedicalRecord extends BaseEntity {
    */
   @Column({ name: 'validator_id', type: 'varchar', length: 32, nullable: true })
   validatorId!: string | null;
+
+  /**
+   * Parent record reference for versioning.
+   *
+   * null  → root record (upload / reanalyze)
+   * value → review result referencing previous record
+   */
+  @Column({ name: 'parent_record_id', type: 'varchar', nullable: true })
+  parentRecordId!: string | null;
 
   /** Path to the original uploaded scan image. */
   @Column({ name: 'original_image_path' })
@@ -80,10 +90,6 @@ export class MedicalRecord extends BaseEntity {
   @Column({ name: 'note', type: 'varchar', nullable: true })
   note!: string | null;
 
-  /** Raw heatmap image value saved as a resolved URL. */
-  @Column({ name: 'heatmap_image', type: 'varchar', nullable: true })
-  heatmapImage!: string | null;
-
   /**
    * Whether the doctor agrees with the AI diagnosis.
    *
@@ -128,4 +134,20 @@ export class MedicalRecord extends BaseEntity {
   })
   @JoinColumn({ name: 'validator_id' })
   validator!: User | null;
+
+  /**
+   * Parent medical record (for versioning).
+   */
+  @ManyToOne(() => MedicalRecord, (record) => record.children, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'parent_record_id' })
+  parent!: MedicalRecord | null;
+
+  /**
+   * Child medical records (review versions).
+   */
+  @OneToMany(() => MedicalRecord, (record) => record.parent)
+  children!: MedicalRecord[];
 }

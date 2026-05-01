@@ -8,16 +8,23 @@ import { MedicalRecord } from '../entities/medical-record.entity';
  */
 export class MedicalRecordDto {
   @ApiProperty({
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: 'MED-123456',
     description: 'Medical Record UUID',
   })
   id!: string;
 
   @ApiProperty({
-    example: '550e8400-e29b-41d4-a716-446655440001',
+    example: 'PAS-654321',
     description: 'Patient UUID',
   })
   patient_id!: string;
+
+  @ApiPropertyOptional({
+    example: 'MED-123455',
+    nullable: true,
+    description: 'Parent medical record ID (null for root records)',
+  })
+  parent_record_id!: string | null;
 
   @ApiProperty({
     example: 'https://api.lumira.ai/uploads/scan_123.png',
@@ -27,7 +34,7 @@ export class MedicalRecordDto {
 
   @ApiProperty({
     example: 'PENDING',
-    enum: ['PENDING', 'APPROVED', 'REJECTED', 'REVIEWED'],
+    enum: ['PENDING', 'REVIEWED'],
     description: 'Validation status',
   })
   validation_status!: string;
@@ -90,11 +97,21 @@ export class MedicalRecordDto {
   note!: string | null;
 
   @ApiPropertyOptional({
-    example: 'https://api.lumira.ai/uploads/brush_123.png',
+    description: 'Doctor information who reviewed this record',
     nullable: true,
-    description: 'Saved heatmap image URL alias from review request',
+    example: {
+      id: 'DOC-123456',
+      name: 'Dr. John Doe',
+      email: 'doctor@mail.com',
+      status: 'ACTIVE',
+    },
   })
-  heatmapImage!: string | null;
+  doctor!: {
+    id: string;
+    name: string;
+    email: string;
+    status: string;
+  } | null;
 
   @ApiProperty({
     example: '2025-04-07T10:30:00Z',
@@ -113,6 +130,7 @@ export class MedicalRecordDto {
     const dto = new MedicalRecordDto();
     dto.id = entity.id;
     dto.patient_id = entity.patientId;
+    dto.parent_record_id = entity.parentRecordId;
     dto.original_image_path = entity.originalImagePath;
     dto.validation_status = entity.validationStatus;
     dto.ai_diagnosis = entity.aiDiagnosis;
@@ -121,12 +139,18 @@ export class MedicalRecordDto {
     dto.doctor_diagnosis = entity.doctorDiagnosis;
     dto.doctor_notes = entity.doctorNotes;
     dto.doctor_brush_path = entity.doctorBrushPath;
-    dto.agreement =
-      entity.isAiAccurate === null ? null : entity.isAiAccurate ? 'agree' : 'disagree';
-    dto.note = entity.doctorNotes;
-    dto.heatmapImage = entity.doctorBrushPath;
+    dto.agreement = entity.agreement;
+    dto.note = entity.note;
     dto.uploaded_at = entity.uploadedAt.toISOString();
     dto.validated_at = entity.validatedAt?.toISOString() || null;
+    dto.doctor = entity.validator
+      ? {
+          id: entity.validator.id,
+          name: entity.validator.name,
+          email: entity.validator.email,
+          status: entity.validator.status,
+        }
+      : null;
     return dto;
   }
 }

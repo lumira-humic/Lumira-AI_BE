@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsInt, IsEnum, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
@@ -33,4 +33,13 @@ export class QueryPatientDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({
+    example: 'waitingForReview',
+    enum: ['waitingForReview', 'needAttention', 'completed'],
+    description: 'Filter patients based on medical record status',
+  })
+  @IsOptional()
+  @IsEnum(['waitingForReview', 'needAttention', 'completed'])
+  status?: 'waitingForReview' | 'needAttention' | 'completed';
 }

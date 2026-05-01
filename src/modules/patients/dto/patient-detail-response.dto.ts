@@ -95,16 +95,27 @@ export class PatientDetailResponseDto {
     return {
       id: record.id,
       patient_id: record.patientId,
+      parent_record_id: record.parentRecordId ?? null,
       original_image_path: record.originalImagePath,
       validation_status: record.validationStatus,
       ai_diagnosis: record.aiDiagnosis,
-      ai_confidence: record.aiConfidence,
-      ai_gradcam_path: record.aiGradcamPath,
-      doctor_diagnosis: record.doctorDiagnosis,
-      doctor_notes: record.doctorNotes,
-      doctor_brush_path: record.doctorBrushPath,
+      ai_confidence: record.aiConfidence ?? null,
+      ai_gradcam_path: record.aiGradcamPath ?? null,
+      doctor_diagnosis: record.doctorDiagnosis ?? null,
+      doctor_notes: record.doctorNotes ?? null,
+      doctor_brush_path: record.doctorBrushPath ?? null,
+      agreement: record.agreement ?? null,
+      note: record.note ?? null,
+      doctor: record.validator
+        ? {
+            id: record.validator.id,
+            name: record.validator.name,
+            email: record.validator.email,
+            status: record.validator.status,
+          }
+        : null,
       uploaded_at: record.uploadedAt,
-      validated_at: record.validatedAt,
+      validated_at: record.validatedAt ?? null,
     };
   }
 }
