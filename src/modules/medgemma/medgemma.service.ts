@@ -288,11 +288,8 @@ export class MedGemmaService {
     return prompt;
   }
 
-  private resolveSessionTitle(aiResponse: string): string | null {
-    const normalized = aiResponse.replace(/\s+/g, ' ').trim();
-    if (!normalized) return null;
-
-    return normalized.length > 160 ? `${normalized.slice(0, 157).trimEnd()}...` : normalized;
+  private resolveSessionTitle(_aiResponse: string): string {
+    return 'untitled';
   }
 
   private toProviderUser(role: MedGemmaRole): 'Doctor' | 'Patient' {

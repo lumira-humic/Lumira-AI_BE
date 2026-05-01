@@ -124,8 +124,7 @@ export class MedGemmaController {
             title: {
               type: 'string',
               nullable: true,
-              example:
-                'Kemungkinan utama adalah angina stabil, namun perlu skrining red flags kardiak',
+              example: 'untitled',
             },
             response: {
               type: 'string',
