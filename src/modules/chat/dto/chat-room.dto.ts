@@ -12,8 +12,8 @@ export class ChatRoomDto {
   @ApiProperty({ example: 'DOC-123456' })
   doctorId!: string;
 
-  @ApiProperty({ example: 'MED-123456', nullable: true })
-  medicalRecordId!: string | null;
+  @ApiProperty({ example: 'MED-123456' })
+  medicalRecordId!: string;
 
   @ApiProperty({ example: '2026-04-24T08:00:00.000Z', nullable: true })
   firstContactNotifiedAt!: string | null;

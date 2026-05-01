@@ -17,6 +17,9 @@ export class MedGemmaSession {
   @Column({ type: 'varchar', length: 16 })
   role!: string;
 
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  title!: string | null;
+
   @Column({
     type: 'timestamp with time zone',
     default: () => "timezone('utc', now())",

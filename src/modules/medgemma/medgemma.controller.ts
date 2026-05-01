@@ -9,7 +9,10 @@ import {
   HttpCode,
   ForbiddenException,
   BadRequestException,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -17,6 +20,7 @@ import {
   ApiResponse,
   ApiBody,
   ApiParam,
+  ApiConsumes,
 } from '@nestjs/swagger';
 
 import { ResponseHelper } from '../../common/helpers/response.helper';
@@ -54,23 +58,34 @@ export class MedGemmaController {
    */
   @Post('consultation')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
+          return cb(
+            new BadRequestException(
+              'Invalid image format. Only JPEG, JPG, PNG and WEBP are allowed',
+            ),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Consult with MedGemma AI Chatbot',
     description:
       'Endpoint for both Doctor (second opinion, image analysis) and Patient (health education, pre-consultation). ' +
-      'Follows MedGemma V2 provider contract: application/json with user_prompt, optional chat history from session, and optional image URL.',
+      'Follows MedGemma V2 provider contract with multipart/form-data: user_prompt, role, and optional image file.',
   })
   @ApiBody({
     schema: {
       type: 'object',
       required: ['user_prompt', 'role'],
       properties: {
-        session_id: {
-          type: 'string',
-          description:
-            'Optional conversation session id. If omitted, server creates a new session id.',
-          example: '90e73057-9959-4acd-a80e-26f1780f81f5',
-        },
         user_prompt: {
           type: 'string',
           description: 'Teks pertanyaan atau keluhan medis dari pengguna',
@@ -83,21 +98,57 @@ export class MedGemmaController {
         },
         image: {
           type: 'string',
-          format: 'uri',
-          description: 'Optional medical image URL for analysis (JPEG, PNG, WEBP)',
-          example: 'https://storage.example.com/medical-images/rontgen-paru-123.jpg',
+          format: 'binary',
+          description: 'Optional medical image file for analysis (JPEG, PNG, WEBP, max 5MB)',
         },
       },
     },
   })
   @ApiResponse({
     status: 200,
-    type: MedGemmaResponseDto,
     description: 'MedGemma AI response',
+    schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', example: 'success' },
+        statusCode: { type: 'number', example: 200 },
+        message: { type: 'string', example: 'MedGemma AI response' },
+        data: {
+          type: 'object',
+          properties: {
+            session_id: {
+              type: 'string',
+              example: '90e73057-9959-4acd-a80e-26f1780f81f5',
+            },
+            role: { type: 'string', enum: ['doctor', 'patient'], example: 'doctor' },
+            title: {
+              type: 'string',
+              nullable: true,
+              example:
+                'Kemungkinan utama adalah angina stabil, namun perlu skrining red flags kardiak',
+            },
+            response: {
+              type: 'string',
+              example:
+                'Pertimbangkan sindrom koroner akut, angina stabil, GERD, dan nyeri muskuloskeletal. Prioritaskan red flags kardiak terlebih dahulu.',
+            },
+            profiling: {
+              type: 'object',
+              properties: {
+                latency_seconds: { type: 'number', example: 12.45 },
+                tokens_generated: { type: 'number', example: 156 },
+                tokens_per_second: { type: 'number', example: 12.53 },
+              },
+            },
+          },
+        },
+      },
+    },
   })
   async consult(
     @Req() req: AuthenticatedRequest,
     @Body() dto: MedGemmaConsultDto,
+    @UploadedFile() imageFile: Express.Multer.File | undefined,
   ): Promise<ApiResponseType<MedGemmaResponseDto>> {
     const resolvedRole = this.resolveRole(req.user);
 
@@ -109,7 +160,11 @@ export class MedGemmaController {
       throw new BadRequestException("Field 'user_prompt' wajib diisi.");
     }
 
-    const result = await this.medgemmaService.consult(dto, resolvedRole);
+    const imageData = imageFile
+      ? `data:${imageFile.mimetype};base64,${imageFile.buffer.toString('base64')}`
+      : undefined;
+
+    const result = await this.medgemmaService.consult(dto, resolvedRole, imageData);
     return ResponseHelper.success(result, 'MedGemma AI response');
   }
 

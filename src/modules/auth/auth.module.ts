@@ -1,19 +1,20 @@
-import { Module, Logger } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
+import { Logger, Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-ioredis-yet';
 import Redis from 'ioredis';
 
-import { User } from '../users/entities/user.entity';
+import { FirebaseAdminService } from '../chat/firebase-admin.service';
 import { Patient } from '../patients/entities/patient.entity';
-import { UsersModule } from '../users/users.module';
 import { PatientsModule } from '../patients/patients.module';
+import { User } from '../users/entities/user.entity';
+import { UsersModule } from '../users/users.module';
 
-import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 
@@ -95,7 +96,7 @@ const logger = new Logger('AuthModule:Redis');
     PatientsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, LocalStrategy],
+  providers: [AuthService, JwtStrategy, LocalStrategy, FirebaseAdminService],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
