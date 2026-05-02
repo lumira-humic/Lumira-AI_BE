@@ -28,12 +28,64 @@ export class PatientsRepository extends Repository<Patient> {
    * @param search - Optional search keyword (name/email)
    * @returns Tuple of [patients, totalCount]
    */
+  // async findAll(
+  //   page: number,
+  //   limit: number,
+  //   search?: string,
+  //   status?: 'waitingForReview' | 'needAttention' | 'completed',
+  // ): Promise<[Patient[], number]> {
+  //   const skip = (page - 1) * limit;
+
+  //   const queryBuilder = this.repository
+  //     .createQueryBuilder('patient')
+  //     .leftJoinAndSelect(
+  //       'patient.medicalRecords',
+  //       'rootRecord',
+  //       'rootRecord.parent_record_id IS NULL',
+  //     )
+  //     .leftJoinAndSelect('rootRecord.children', 'childRecord')
+  //     .leftJoinAndSelect('childRecord.validator', 'childDoctor')
+  //     .leftJoinAndSelect('rootRecord.validator', 'rootDoctor')
+  //     .distinct(true);
+
+  //   if (search) {
+  //     queryBuilder.andWhere('(patient.name ILIKE :search OR patient.email ILIKE :search)', {
+  //       search: `%${search}%`,
+  //     });
+  //   }
+
+  //   if (status === 'waitingForReview') {
+  //     queryBuilder
+  //       .andWhere('childRecord.id IS NULL')
+  //       .andWhere('LOWER(rootRecord.ai_diagnosis) != :malignant', {
+  //         malignant: 'malignant',
+  //       });
+  //   }
+
+  //   if (status === 'needAttention') {
+  //     queryBuilder
+  //       .andWhere('childRecord.id IS NULL')
+  //       .andWhere('LOWER(rootRecord.ai_diagnosis) = :malignant', {
+  //         malignant: 'malignant',
+  //       });
+  //   }
+
+  //   if (status === 'completed') {
+  //     queryBuilder.andWhere('childRecord.id IS NOT NULL');
+  //   }
+
+  //   queryBuilder.skip(skip).take(limit).orderBy('patient.createdAt', 'DESC');
+
+  //   return queryBuilder.getManyAndCount();
+  // }
   async findAll(page: number, limit: number, search?: string): Promise<[Patient[], number]> {
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.repository
       .createQueryBuilder('patient')
-      .leftJoinAndSelect('patient.medicalRecords', 'medicalRecords');
+      .leftJoinAndSelect('patient.medicalRecords', 'record')
+      .leftJoinAndSelect('record.validator', 'doctor')
+      .distinct(true);
 
     if (search) {
       queryBuilder.andWhere('(patient.name ILIKE :search OR patient.email ILIKE :search)', {
@@ -70,11 +122,13 @@ export class PatientsRepository extends Repository<Patient> {
     return this.repository.findOne({
       where: { id },
       relations: {
-        medicalRecords: true,
+        medicalRecords: {
+          validator: true,
+        },
       },
       order: {
         medicalRecords: {
-          updatedAt: 'DESC',
+          createdAt: 'DESC',
         },
       },
     });

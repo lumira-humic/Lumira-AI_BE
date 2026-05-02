@@ -50,9 +50,9 @@ export class PatientListResponseDto {
   @ApiProperty({
     example: 'PENDING',
     description: 'Validation status of the latest medical record',
-    enum: ['PENDING', 'APPROVED', 'REJECTED', 'REVIEWED'],
+    enum: ['PENDING', 'REVIEWED'],
   })
-  review!: string;
+  review!: string | null;
 
   @ApiProperty({
     description: 'All medical records associated whit this patient',
@@ -63,7 +63,6 @@ export class PatientListResponseDto {
   static fromEntity(
     patient: Patient,
     image?: string | null,
-    review?: string,
     records?: MedicalRecord[],
   ): PatientListResponseDto {
     const dto = new PatientListResponseDto();
@@ -73,7 +72,14 @@ export class PatientListResponseDto {
     dto.phone = patient.phone;
     dto.address = patient.address;
     dto.image = image || null;
-    dto.review = review || 'PENDING';
+    const medicalRecords = records ?? [];
+    if (medicalRecords.length === 0) {
+      dto.review = null;
+    } else if (medicalRecords.every((r) => r.validationStatus === 'REVIEWED')) {
+      dto.review = 'REVIEWED';
+    } else {
+      dto.review = 'PENDING';
+    }
     dto.medical_records = records ? records.map((r) => this.medicalRecordToObject(r)) : [];
     return dto;
   }
@@ -82,16 +88,27 @@ export class PatientListResponseDto {
     return {
       id: record.id,
       patient_id: record.patientId,
+      parent_record_id: record.parentRecordId ?? null,
       original_image_path: record.originalImagePath,
       validation_status: record.validationStatus,
       ai_diagnosis: record.aiDiagnosis,
-      ai_confidence: record.aiConfidence,
-      ai_gradcam_path: record.aiGradcamPath,
-      doctor_diagnosis: record.doctorDiagnosis,
-      doctor_notes: record.doctorNotes,
-      doctor_brush_path: record.doctorBrushPath,
+      ai_confidence: record.aiConfidence ?? null,
+      ai_gradcam_path: record.aiGradcamPath ?? null,
+      doctor_diagnosis: record.doctorDiagnosis ?? null,
+      doctor_notes: record.doctorNotes ?? null,
+      doctor_brush_path: record.doctorBrushPath ?? null,
+      agreement: record.agreement ?? null,
+      note: record.note ?? null,
+      doctor: record.validator
+        ? {
+            id: record.validator.id,
+            name: record.validator.name,
+            email: record.validator.email,
+            status: record.validator.status,
+          }
+        : null,
       uploaded_at: record.uploadedAt,
-      validated_at: record.validatedAt,
+      validated_at: record.validatedAt ?? null,
     };
   }
 }

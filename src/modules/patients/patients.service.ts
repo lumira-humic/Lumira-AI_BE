@@ -32,27 +32,95 @@ export class PatientsService {
   /**
    * Retrieve all patients with their latest medical record status.
    */
-  async findAll(
-    query: QueryPatientDto,
-  ): Promise<{ data: PatientListResponseDto[]; total: number; page: number; limit: number }> {
+  // async findAll(
+  //   query: QueryPatientDto,
+  // ): Promise<{ data: PatientListResponseDto[]; total: number; page: number; limit: number }> {
+  //   const page = query.page ?? 1;
+  //   const limit = query.limit ?? 10;
+  //   const search = query.search;
+  //   const status = query.status;
+
+  //   const [patients, total] = await this.patientsRepository.findAll(page, limit, search, status);
+
+  //   const data = patients.map((patient) => {
+  //     const records = patient.medicalRecords ?? [];
+
+  //     let finalRecords = this.getFinalMedicalRecords(records);
+
+  //     if (status === 'completed') {
+  //       finalRecords = finalRecords.filter((r) => r.validationStatus === 'REVIEWED');
+  //     }
+
+  //     const latestRecord = finalRecords.sort(
+  //       (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  //     )[0];
+
+  //     return PatientListResponseDto.fromEntity(
+  //       patient,
+  //       latestRecord?.originalImagePath ?? null,
+  //       latestRecord?.validationStatus,
+  //       finalRecords,
+  //     );
+  //   });
+
+  //   return { data, total, page, limit };
+  // }
+  async findAll(query: QueryPatientDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
     const search = query.search;
+    const status = query.status;
 
-    const [patients, total] = await this.patientsRepository.findAll(page, limit, search);
+    const [patients] = await this.patientsRepository.findAll(page, limit, search);
 
-    const data = patients.map((patient) => {
+    const mapped = patients.map((patient) => {
       const records = patient.medicalRecords ?? [];
-      const latestRecord = records[0];
-      return PatientListResponseDto.fromEntity(
+
+      let finalRecords = this.getFinalMedicalRecords(records);
+
+      if (status === 'completed') {
+        finalRecords = finalRecords.filter((r) => r.validationStatus === 'REVIEWED');
+      }
+
+      if (status === 'waitingForReview') {
+        finalRecords = finalRecords.filter(
+          (r) => r.validationStatus === 'PENDING' && r.aiDiagnosis?.toLowerCase() !== 'malignant',
+        );
+      }
+
+      if (status === 'needAttention') {
+        finalRecords = finalRecords.filter(
+          (r) => r.validationStatus === 'PENDING' && r.aiDiagnosis?.toLowerCase() === 'malignant',
+        );
+      }
+
+      const latestRecord = finalRecords.sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      )[0];
+
+      return {
         patient,
-        latestRecord?.originalImagePath ?? null,
-        latestRecord?.validationStatus ?? 'PENDING',
-        records,
-      );
+        finalRecords,
+        latestRecord,
+      };
     });
 
-    return { data, total, page, limit };
+    const filtered = mapped.filter((item) => item.finalRecords.length > 0);
+
+    const data = filtered.map((item) =>
+      PatientListResponseDto.fromEntity(
+        item.patient,
+        item.latestRecord?.originalImagePath ?? null,
+        item.finalRecords,
+      ),
+    );
+
+    return {
+      data,
+      total: data.length,
+      page,
+      limit,
+    };
   }
 
   /**
@@ -102,6 +170,23 @@ export class PatientsService {
   /**
    * Retrieve a patient by ID with all their medical records.
    */
+  // async findById(id: string): Promise<PatientDetailResponseDto> {
+  //   const patient = await this.patientsRepository.findById(id);
+
+  //   if (!patient) {
+  //     throw new NotFoundException('Patient not found');
+  //   }
+
+  //   const records = patient.medicalRecords ?? [];
+
+  //   const finalRecords = this.getFinalMedicalRecords(records);
+
+  //   const latestRecord = finalRecords.sort(
+  //     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  //   )[0];
+
+  //   return PatientDetailResponseDto.fromEntity(patient, latestRecord, finalRecords);
+  // }
   async findById(id: string): Promise<PatientDetailResponseDto> {
     const patient = await this.patientsRepository.findById(id);
 
@@ -110,9 +195,14 @@ export class PatientsService {
     }
 
     const records = patient.medicalRecords ?? [];
-    const latestRecord: MedicalRecord | undefined = records[0];
 
-    return PatientDetailResponseDto.fromEntity(patient, latestRecord, records);
+    const finalRecords = this.getFinalMedicalRecords(records);
+
+    const latestRecord = finalRecords.sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    )[0];
+
+    return PatientDetailResponseDto.fromEntity(patient, latestRecord, finalRecords);
   }
 
   /**
@@ -175,5 +265,27 @@ export class PatientsService {
     });
 
     return dto;
+  }
+
+  private getFinalMedicalRecords(records: MedicalRecord[]): MedicalRecord[] {
+    const result: MedicalRecord[] = [];
+
+    const rootRecords = records.filter((r) => !r.parentRecordId);
+
+    for (const root of rootRecords) {
+      const children = records.filter((r) => r.parentRecordId === root.id);
+
+      if (children.length > 0) {
+        const latestChild = children.sort(
+          (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+        )[0];
+
+        result.push(latestChild);
+      } else {
+        result.push(root);
+      }
+    }
+
+    return result;
   }
 }
