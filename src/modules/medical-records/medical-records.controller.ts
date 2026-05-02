@@ -1,5 +1,6 @@
 import {
   Controller,
+  Patch,
   Post,
   Param,
   Body,
@@ -25,7 +26,7 @@ import { ResponseHelper } from '../../common/helpers/response.helper';
 import { ApiResponse as ApiResponseType } from '../../common/interfaces/api-response.interface';
 
 import { MedicalRecordsService } from './medical-records.service';
-import { MedicalRecordDto, SaveDoctorReviewDto } from './dto';
+import { MedicalRecordDto, SaveDoctorReviewDto, UpdateDoctorReviewDto } from './dto';
 import { RolesGuard } from '../../common/guards';
 import { Roles } from '../../common/decorators';
 import { User, UserRole } from '../users';
@@ -176,6 +177,87 @@ export class MedicalRecordsController {
       doctorBrushFile,
     );
     return ResponseHelper.success(result, 'Review successfully saved');
+  }
+
+  /**
+   * Edit an existing doctor review for an AI diagnosis.
+   */
+  @Patch('medical-records/:id/review')
+  @Roles(UserRole.DOCTOR)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('doctorBrushPath', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+          return cb(
+            new BadRequestException('Invalid format. Only JPEG, JPG and PNG are allowed'),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Edit Doctor Review for an AI diagnosis',
+    description:
+      'Doctor edits an existing review. The id can be the root medical record id or the reviewed record id.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    description: 'Root Medical Record UUID or Reviewed Medical Record UUID',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        agreement: {
+          type: 'string',
+          enum: ['agree', 'disagree'],
+          example: 'agree',
+        },
+        doctorDiagnosis: {
+          type: 'string',
+          enum: ['normal', 'benign', 'malignant'],
+          example: 'benign',
+        },
+        note: {
+          type: 'string',
+          example: 'Updated review note after re-checking the image',
+        },
+        doctorBrushPath: {
+          type: 'string',
+          format: 'binary',
+          description: "Replacement doctor's brush annotation image (JPG/JPEG/PNG)",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    type: MedicalRecordDto,
+    description: 'Review successfully updated',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Medical record or review not found',
+  })
+  async updateDoctorReview(
+    @Param('id') id: string,
+    @Body() dto: UpdateDoctorReviewDto,
+    @UploadedFile() doctorBrushFile: Express.Multer.File | undefined,
+    @CurrentUser() user: User,
+  ): Promise<ApiResponseType<MedicalRecordDto>> {
+    const result = await this.medicalRecordsService.updateDoctorReview(
+      id,
+      dto,
+      user,
+      doctorBrushFile,
+    );
+    return ResponseHelper.success(result, 'Review successfully updated');
   }
 
   /**
