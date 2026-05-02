@@ -47,4 +47,8 @@ export class PatientRequestDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsString()
+  medicalRecordImage?: string;
 }
