@@ -5,7 +5,7 @@ import axios from 'axios';
 import FormData = require('form-data');
 
 import { ActivityLog } from '../activities/entities/activity-log.entity';
-import { MedicalRecordDto, SaveDoctorReviewDto } from './dto';
+import { MedicalRecordDto, SaveDoctorReviewDto, UpdateDoctorReviewDto } from './dto';
 import { User } from '../users';
 import { generatePrefixedId } from '../../common/utils/id-generator.util';
 import { ValidationStatus } from './enums';
@@ -259,6 +259,119 @@ export class MedicalRecordsService {
     });
 
     // load relasi agar validator ter-populate di response
+    const savedWithRelations = await this.medicalRecordRepository.findOne({
+      where: { id: saved.id },
+      relations: { validator: true },
+    });
+
+    return this.mapToDto(savedWithRelations!);
+  }
+
+  async updateDoctorReview(
+    id: string,
+    dto: UpdateDoctorReviewDto,
+    user: User,
+    doctorBrushFile?: Express.Multer.File,
+  ): Promise<MedicalRecordDto> {
+    const targetRecord = await this.medicalRecordRepository.findOne({
+      where: { id },
+      relations: { validator: true },
+    });
+
+    if (!targetRecord) {
+      throw new NotFoundException('Medical record not found');
+    }
+
+    const reviewRecord = targetRecord.parentRecordId
+      ? targetRecord
+      : await this.medicalRecordRepository.findOne({
+          where: { parentRecordId: targetRecord.id },
+          relations: { validator: true },
+        });
+
+    if (!reviewRecord) {
+      throw new NotFoundException('Doctor review not found');
+    }
+
+    const hasAgreement = Object.prototype.hasOwnProperty.call(dto, 'agreement');
+    const hasDoctorDiagnosis = Object.prototype.hasOwnProperty.call(dto, 'doctorDiagnosis');
+    const hasNote = Object.prototype.hasOwnProperty.call(dto, 'note');
+
+    if (!hasAgreement && !hasDoctorDiagnosis && !hasNote && !doctorBrushFile) {
+      throw new BadRequestException('At least one review field must be provided');
+    }
+
+    const nextAgreement = hasAgreement ? dto.agreement : reviewRecord.agreement;
+    const currentDoctorDiagnosis = reviewRecord.doctorDiagnosis?.toLowerCase() as
+      | 'normal'
+      | 'benign'
+      | 'malignant'
+      | undefined;
+    const nextDoctorDiagnosis = hasDoctorDiagnosis ? dto.doctorDiagnosis : currentDoctorDiagnosis;
+    const aiDiagnosisLower = reviewRecord.aiDiagnosis?.toLowerCase();
+
+    if (!nextAgreement) {
+      throw new BadRequestException('Agreement is required to update this review');
+    }
+
+    if (!nextDoctorDiagnosis) {
+      throw new BadRequestException('Doctor diagnosis is required to update this review');
+    }
+
+    if (!aiDiagnosisLower) {
+      throw new BadRequestException('AI diagnosis not found');
+    }
+
+    if (nextAgreement === 'agree' && nextDoctorDiagnosis !== aiDiagnosisLower) {
+      throw new BadRequestException(
+        'Doctor diagnosis must match AI diagnosis when agreement is agree',
+      );
+    }
+
+    if (nextAgreement === 'disagree' && nextDoctorDiagnosis === aiDiagnosisLower) {
+      throw new BadRequestException(
+        'Doctor diagnosis must differ from AI diagnosis when agreement is disagree',
+      );
+    }
+
+    if (doctorBrushFile) {
+      if (!doctorBrushFile.originalname.match(/\.(jpg|jpeg|png)$/i)) {
+        throw new BadRequestException('Invalid format. Only JPEG, JPG and PNG are allowed');
+      }
+
+      const isCloudinary = this.isCloudinary();
+      const result = isCloudinary
+        ? await this.cloudinary.uploadBuffer(doctorBrushFile.buffer, { folder: 'mask' })
+        : await this.localStorage.uploadBuffer(doctorBrushFile.buffer, { folder: 'mask' });
+
+      reviewRecord.doctorBrushPath = result.secure_url;
+    }
+
+    reviewRecord.validationStatus = ValidationStatus.REVIEWED;
+    reviewRecord.doctorDiagnosis =
+      nextDoctorDiagnosis.charAt(0).toUpperCase() + nextDoctorDiagnosis.slice(1);
+    reviewRecord.agreement = nextAgreement;
+    reviewRecord.isAiAccurate = nextAgreement === 'agree';
+    reviewRecord.validatorId = user.id;
+    reviewRecord.validatedAt = new Date();
+
+    if (hasNote) {
+      reviewRecord.doctorNotes = dto.note ?? null;
+      reviewRecord.note = dto.note ?? null;
+    }
+
+    const saved = await this.medicalRecordRepository.save(reviewRecord);
+
+    await this.activityLogRepo.save({
+      id: generatePrefixedId('ACT'),
+      userId: user.id,
+      actionType: 'UPDATE_MEDICAL_RECORD_REVIEW',
+      description: `Updated review for medical record ${
+        reviewRecord.parentRecordId ?? reviewRecord.id
+      }`,
+      timestamp: new Date(),
+    });
+
     const savedWithRelations = await this.medicalRecordRepository.findOne({
       where: { id: saved.id },
       relations: { validator: true },
