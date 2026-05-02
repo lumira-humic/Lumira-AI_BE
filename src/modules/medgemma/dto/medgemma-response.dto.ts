@@ -97,7 +97,7 @@ export class MedGemmaChatHistoryDto {
   @ApiProperty({
     isArray: true,
     type: MedGemmaChatMessageDto,
-    description: 'Latest 10 messages for this session',
+    description: 'All persisted messages for this session',
   })
   messages!: MedGemmaChatMessageDto[];
 }
