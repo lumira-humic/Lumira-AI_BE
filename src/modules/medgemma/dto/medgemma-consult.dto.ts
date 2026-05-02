@@ -6,6 +6,14 @@ import { IsString, IsNotEmpty, IsEnum, IsOptional } from 'class-validator';
  */
 export class MedGemmaConsultDto {
   @ApiPropertyOptional({
+    description: 'Existing conversation session identifier. Omit this field to start a new chat.',
+    example: '90e73057-9959-4acd-a80e-26f1780f81f5',
+  })
+  @IsOptional()
+  @IsString()
+  session_id?: string;
+
+  @ApiPropertyOptional({
     description: 'Legacy alias for user_prompt. Prefer user_prompt for new clients.',
     example: 'What are the signs of a malignant tumor?',
   })
