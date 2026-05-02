@@ -25,6 +25,8 @@ import {
 
 import { ResponseHelper } from '../../common/helpers/response.helper';
 import { ApiResponse as ApiResponseType } from '../../common/interfaces/api-response.interface';
+import { validateUploadedImage } from '../../common/utils/image-upload.util';
+import { ObjectStorageService } from '../object-storage/object-storage.service';
 import { UserRole } from '../users/enums/user-role.enum';
 
 import { MedGemmaService } from './medgemma.service';
@@ -51,7 +53,10 @@ type AuthenticatedRequest = {
 @ApiBearerAuth('BearerAuth')
 @Controller('medgemma')
 export class MedGemmaController {
-  constructor(private readonly medgemmaService: MedGemmaService) {}
+  constructor(
+    private readonly medgemmaService: MedGemmaService,
+    private readonly objectStorageService: ObjectStorageService,
+  ) {}
 
   /**
    * Consult with MedGemma AI chatbot.
@@ -159,11 +164,19 @@ export class MedGemmaController {
       throw new BadRequestException("Field 'user_prompt' wajib diisi.");
     }
 
-    const imageData = imageFile
-      ? `data:${imageFile.mimetype};base64,${imageFile.buffer.toString('base64')}`
-      : undefined;
+    let imageUrl: string | undefined;
+    if (imageFile) {
+      const validated = validateUploadedImage(imageFile);
+      const format = this.resolveImageFormat(validated.mimetype, validated.originalname);
+      const uploadResult = await this.objectStorageService.uploadBuffer(validated.buffer, {
+        folder: 'medgemma',
+        resource_type: 'image',
+        ...(format ? { format } : {}),
+      });
+      imageUrl = uploadResult.secure_url;
+    }
 
-    const result = await this.medgemmaService.consult(dto, resolvedRole, imageData);
+    const result = await this.medgemmaService.consult(dto, resolvedRole, imageUrl);
     return ResponseHelper.success(result, 'MedGemma AI response');
   }
 
@@ -257,5 +270,27 @@ export class MedGemmaController {
     }
 
     throw new ForbiddenException('Only doctor and patient can access MedGemma chatbot');
+  }
+
+  private resolveImageFormat(mimeType: string, originalname: string): string | undefined {
+    const normalizedMime = mimeType.trim().toLowerCase();
+    if (normalizedMime === 'image/jpeg' || normalizedMime === 'image/jpg') {
+      return 'jpg';
+    }
+
+    if (normalizedMime === 'image/png') {
+      return 'png';
+    }
+
+    if (normalizedMime === 'image/webp') {
+      return 'webp';
+    }
+
+    const extension = originalname.trim().toLowerCase().split('.').pop();
+    if (extension && ['jpg', 'jpeg', 'png', 'webp'].includes(extension)) {
+      return extension === 'jpeg' ? 'jpg' : extension;
+    }
+
+    return undefined;
   }
 }

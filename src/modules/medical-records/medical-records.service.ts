@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import axios from 'axios';
 import FormData = require('form-data');
 
@@ -13,9 +13,6 @@ import { MedicalRecord } from './entities';
 import { Patient } from '../patients/entities';
 import { CloudinaryStorageService, LocalStorageService } from '../object-storage';
 
-/**
- * Service for medical records and AI analysis workflows.
- */
 @Injectable()
 export class MedicalRecordsService {
   constructor(
@@ -32,9 +29,6 @@ export class MedicalRecordsService {
     private readonly localStorage: LocalStorageService,
   ) {}
 
-  /**
-   * Upload a medical image and trigger AI analysis.
-   */
   async uploadAndAnalyze(
     patientId: string,
     file: Express.Multer.File,
@@ -60,14 +54,10 @@ export class MedicalRecordsService {
     let imageUrl: string;
 
     if (isCloudinary) {
-      const result = await this.cloudinary.uploadBuffer(file.buffer, {
-        folder: 'raw',
-      });
+      const result = await this.cloudinary.uploadBuffer(file.buffer, { folder: 'raw' });
       imageUrl = result.secure_url;
     } else {
-      const result = await this.localStorage.uploadBuffer(file.buffer, {
-        folder: 'raw',
-      });
+      const result = await this.localStorage.uploadBuffer(file.buffer, { folder: 'raw' });
       imageUrl = result.secure_url;
     }
 
@@ -84,15 +74,14 @@ export class MedicalRecordsService {
       gradcam_path: string;
       feature_dim: number;
     };
+
     let aiResult: AiResponse;
 
     try {
       const response = await axios.post<unknown>(
         'https://lumirahumic-integrasi-ai.hf.space/predict',
         formData,
-        {
-          headers: formData.getHeaders(),
-        },
+        { headers: formData.getHeaders() },
       );
       aiResult = this.parseAiResponse(response.data);
     } catch {
@@ -117,6 +106,7 @@ export class MedicalRecordsService {
       default:
         throw new BadRequestException('Unknown AI classification');
     }
+
     const confidence = aiResult.confidence ?? null;
 
     let gradcamUrl: string | null = null;
@@ -155,14 +145,12 @@ export class MedicalRecordsService {
       doctorBrushPath: null,
       agreement: null,
       note: null,
-      heatmapImage: null,
       isAiAccurate: null,
       validatedAt: null,
     });
 
     const saved = await this.medicalRecordRepository.save(record);
 
-    // Log activity
     await this.activityLogRepo.save({
       id: generatePrefixedId('ACT'),
       userId: actorId,
@@ -171,86 +159,114 @@ export class MedicalRecordsService {
       timestamp: new Date(),
     });
 
-    return this.mapToDto(saved);
+    // load relasi untuk konsistensi response
+    const savedWithRelations = await this.medicalRecordRepository.findOne({
+      where: { id: saved.id },
+      relations: { validator: true },
+    });
+
+    return this.mapToDto(savedWithRelations!);
   }
 
-  /**
-   * Submit doctor review on a medical record.
-   */
   async submitDoctorReview(
     id: string,
     dto: SaveDoctorReviewDto,
     user: User,
-    heatmapImageFile?: Express.Multer.File,
+    doctorBrushFile?: Express.Multer.File,
   ): Promise<MedicalRecordDto> {
     const record = await this.medicalRecordRepository.findOne({
       where: { id },
+      relations: { validator: true },
     });
 
     if (!record) {
       throw new NotFoundException('Medical record not found');
     }
 
-    const isAgree = dto.agreement === 'agree';
-
-    record.isAiAccurate = isAgree;
-    record.doctorNotes = dto.note ?? null;
-    record.agreement = dto.agreement;
-    record.note = dto.note ?? null;
-
-    if (heatmapImageFile) {
-      if (!heatmapImageFile.originalname.match(/\.(jpg|jpeg|png)$/i)) {
-        throw new BadRequestException('Invalid heatmap format. Only JPEG, JPG and PNG are allowed');
-      }
-      const buffer = heatmapImageFile.buffer;
-
-      const isCloudinary = this.isCloudinary();
-
-      let maskUrl: string;
-
-      if (isCloudinary) {
-        const result = await this.cloudinary.uploadBuffer(buffer, {
-          folder: 'mask',
-        });
-        maskUrl = result.secure_url;
-      } else {
-        const result = await this.localStorage.uploadBuffer(buffer, {
-          folder: 'mask',
-        });
-        maskUrl = result.secure_url;
-      }
-
-      record.doctorBrushPath = maskUrl;
-      record.heatmapImage = maskUrl;
-    } else {
-      record.doctorBrushPath = null;
-      record.heatmapImage = null;
+    if (record.parentRecordId) {
+      throw new BadRequestException('Cannot review a reviewed record');
     }
 
-    record.validatorId = user.id;
-    record.validatedAt = new Date();
-    record.validationStatus = isAgree ? ValidationStatus.APPROVED : ValidationStatus.REJECTED;
-    record.doctorDiagnosis = isAgree ? record.aiDiagnosis : null;
+    const existingReview = await this.medicalRecordRepository.findOne({
+      where: { parentRecordId: id },
+    });
 
-    const updated = await this.medicalRecordRepository.save(record);
+    if (existingReview) {
+      throw new BadRequestException('This medical record has already been reviewed');
+    }
 
-    // Log activity
+    const aiDiagnosisLower = record.aiDiagnosis?.toLowerCase();
+
+    if (!aiDiagnosisLower) {
+      throw new BadRequestException('AI diagnosis not found');
+    }
+
+    if (dto.agreement === 'agree' && dto.doctorDiagnosis !== aiDiagnosisLower) {
+      throw new BadRequestException(
+        'Doctor diagnosis must match AI diagnosis when agreement is agree',
+      );
+    }
+
+    if (dto.agreement === 'disagree' && dto.doctorDiagnosis === aiDiagnosisLower) {
+      throw new BadRequestException(
+        'Doctor diagnosis must differ from AI diagnosis when agreement is disagree',
+      );
+    }
+
+    let brushUrl: string | null = null;
+
+    if (doctorBrushFile) {
+      if (!doctorBrushFile.originalname.match(/\.(jpg|jpeg|png)$/i)) {
+        throw new BadRequestException('Invalid format. Only JPEG, JPG and PNG are allowed');
+      }
+
+      const isCloudinary = this.isCloudinary();
+      const result = isCloudinary
+        ? await this.cloudinary.uploadBuffer(doctorBrushFile.buffer, { folder: 'mask' })
+        : await this.localStorage.uploadBuffer(doctorBrushFile.buffer, { folder: 'mask' });
+
+      brushUrl = result.secure_url;
+    }
+
+    const newRecord = this.medicalRecordRepository.create({
+      id: generatePrefixedId('MED'),
+      patientId: record.patientId,
+      parentRecordId: record.id,
+      originalImagePath: record.originalImagePath,
+      aiDiagnosis: record.aiDiagnosis,
+      aiConfidence: record.aiConfidence,
+      aiGradcamPath: record.aiGradcamPath,
+      uploadedAt: record.uploadedAt,
+      validationStatus: ValidationStatus.REVIEWED,
+      doctorDiagnosis: dto.doctorDiagnosis.charAt(0).toUpperCase() + dto.doctorDiagnosis.slice(1),
+      doctorNotes: dto.note ?? null,
+      doctorBrushPath: brushUrl,
+      agreement: dto.agreement,
+      note: dto.note ?? null,
+      isAiAccurate: dto.agreement === 'agree',
+      validatorId: user.id,
+      validatedAt: new Date(),
+    });
+
+    const saved = await this.medicalRecordRepository.save(newRecord);
+
     await this.activityLogRepo.save({
       id: generatePrefixedId('ACT'),
       userId: user.id,
       actionType: 'VALIDATE_MEDICAL_RECORD',
-      description: `${isAgree ? 'Approved' : 'Rejected'} medical record for patient ${
-        record.patient?.name ?? record.patientId
-      }`,
+      description: `Reviewed medical record for patient ${record.patientId}`,
       timestamp: new Date(),
     });
 
-    return this.mapToDto(updated);
+    // load relasi agar validator ter-populate di response
+    const savedWithRelations = await this.medicalRecordRepository.findOne({
+      where: { id: saved.id },
+      relations: { validator: true },
+    });
+
+    return this.mapToDto(savedWithRelations!);
   }
 
-  /**
-   * Re-analyze the latest patient image.
-   */
   async reanalyzePatient(patientId: string, actorId: string): Promise<MedicalRecordDto> {
     const patient = await this.patientRepository.findOne({
       where: { id: patientId },
@@ -261,15 +277,13 @@ export class MedicalRecordsService {
     }
 
     const record = await this.medicalRecordRepository.findOne({
-      where: { patientId },
-      order: { uploadedAt: 'DESC' },
+      where: { patientId, parentRecordId: IsNull() },
+      order: { createdAt: 'DESC' },
     });
 
     if (!record) {
       throw new NotFoundException('No medical record found for this patient');
     }
-
-    const isCloudinary = this.isCloudinary();
 
     const imageResponse = await axios.get<ArrayBuffer>(record.originalImagePath, {
       responseType: 'arraybuffer',
@@ -289,19 +303,17 @@ export class MedicalRecordsService {
       gradcam_path: string;
       feature_dim: number;
     };
+
     let aiResult: AiResponse;
 
     try {
       const response = await axios.post<unknown>(
         'https://lumirahumic-integrasi-ai.hf.space/predict',
         formData,
-        {
-          headers: formData.getHeaders(),
-        },
+        { headers: formData.getHeaders() },
       );
-
       aiResult = this.parseAiResponse(response.data);
-    } catch (error: unknown) {
+    } catch {
       throw new BadRequestException('AI re-analysis failed');
     }
 
@@ -310,8 +322,7 @@ export class MedicalRecordsService {
     }
 
     let diagnosis: string;
-
-    switch (aiResult.class?.toLowerCase()) {
+    switch (aiResult.class.toLowerCase()) {
       case 'malignant':
         diagnosis = 'Malignant';
         break;
@@ -333,40 +344,39 @@ export class MedicalRecordsService {
       if (typeof aiResult.gradcam_base64 !== 'string') {
         throw new BadRequestException('Invalid gradcam format');
       }
-      const buffer = Buffer.from(aiResult.gradcam_base64, 'base64');
 
-      if (isCloudinary) {
-        const result = await this.cloudinary.uploadBuffer(buffer, {
-          folder: 'gradcam',
-          format: 'png',
-        });
-        gradcamUrl = result.secure_url;
-      } else {
-        const result = await this.localStorage.uploadBuffer(buffer, {
-          folder: 'gradcam',
-          format: 'png',
-        });
-        gradcamUrl = result.secure_url;
-      }
+      const buffer = Buffer.from(aiResult.gradcam_base64, 'base64');
+      const isCloudinary = this.isCloudinary();
+
+      const result = isCloudinary
+        ? await this.cloudinary.uploadBuffer(buffer, { folder: 'gradcam', format: 'png' })
+        : await this.localStorage.uploadBuffer(buffer, { folder: 'gradcam', format: 'png' });
+
+      gradcamUrl = result.secure_url;
     }
 
-    record.aiDiagnosis = diagnosis;
-    record.aiConfidence = confidence;
-    record.aiGradcamPath = gradcamUrl ?? null;
+    const newRecord = this.medicalRecordRepository.create({
+      id: generatePrefixedId('MED'),
+      patientId,
+      parentRecordId: null,
+      originalImagePath: record.originalImagePath,
+      aiDiagnosis: diagnosis,
+      aiConfidence: confidence,
+      aiGradcamPath: gradcamUrl,
+      validationStatus: ValidationStatus.PENDING,
+      doctorDiagnosis: null,
+      doctorNotes: null,
+      doctorBrushPath: null,
+      agreement: null,
+      note: null,
+      isAiAccurate: null,
+      validatorId: null,
+      validatedAt: null,
+      uploadedAt: new Date(),
+    });
 
-    record.validationStatus = ValidationStatus.PENDING;
-    record.doctorDiagnosis = null;
-    record.doctorNotes = null;
-    record.doctorBrushPath = null;
-    record.agreement = null;
-    record.note = null;
-    record.heatmapImage = null;
-    record.isAiAccurate = null;
-    record.validatedAt = null;
+    const saved = await this.medicalRecordRepository.save(newRecord);
 
-    const updated = await this.medicalRecordRepository.save(record);
-
-    // Log activity
     await this.activityLogRepo.save({
       id: generatePrefixedId('ACT'),
       userId: actorId,
@@ -375,13 +385,20 @@ export class MedicalRecordsService {
       timestamp: new Date(),
     });
 
-    return this.mapToDto(updated);
+    // load relasi untuk konsistensi response (validator akan null tapi tetap konsisten)
+    const savedWithRelations = await this.medicalRecordRepository.findOne({
+      where: { id: saved.id },
+      relations: { validator: true },
+    });
+
+    return this.mapToDto(savedWithRelations!);
   }
 
   private mapToDto(record: MedicalRecord): MedicalRecordDto {
     return {
       id: record.id,
       patient_id: record.patientId,
+      parent_record_id: record.parentRecordId,
       original_image_path: record.originalImagePath,
       validation_status: record.validationStatus,
       ai_diagnosis: record.aiDiagnosis,
@@ -390,13 +407,18 @@ export class MedicalRecordsService {
       doctor_diagnosis: record.doctorDiagnosis,
       doctor_notes: record.doctorNotes,
       doctor_brush_path: record.doctorBrushPath,
-      agreement:
-        record.agreement ??
-        (record.isAiAccurate === null ? null : record.isAiAccurate ? 'agree' : 'disagree'),
-      note: record.note ?? record.doctorNotes,
-      heatmapImage: record.heatmapImage ?? record.doctorBrushPath,
+      agreement: record.agreement,
+      note: record.note,
       uploaded_at: record.uploadedAt.toISOString(),
       validated_at: record.validatedAt ? record.validatedAt.toISOString() : null,
+      doctor: record.validator
+        ? {
+            id: record.validator.id,
+            name: record.validator.name,
+            email: record.validator.email,
+            status: record.validator.status,
+          }
+        : null,
     };
   }
 

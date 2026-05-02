@@ -104,12 +104,12 @@ export class MedicalRecordsController {
   @Roles(UserRole.DOCTOR)
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
-    FileInterceptor('heatmapImage', {
+    FileInterceptor('doctorBrushPath', {
       limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
           return cb(
-            new BadRequestException('Invalid heatmap format. Only JPEG, JPG and PNG are allowed'),
+            new BadRequestException('Invalid format. Only JPEG, JPG and PNG are allowed'),
             false,
           );
         }
@@ -130,21 +130,26 @@ export class MedicalRecordsController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['agreement'],
+      required: ['agreement', 'doctorDiagnosis'],
       properties: {
         agreement: {
           type: 'string',
           enum: ['agree', 'disagree'],
           example: 'agree',
         },
+        doctorDiagnosis: {
+          type: 'string',
+          enum: ['normal', 'benign', 'malignant'],
+          example: 'benign',
+        },
         note: {
           type: 'string',
           example: 'Confirmed benign nodule, recommend follow-up in 6 months',
         },
-        heatmapImage: {
+        doctorBrushPath: {
           type: 'string',
           format: 'binary',
-          description: "Doctor's heatmap mask image (JPG/JPEG/PNG)",
+          description: "Doctor's brush annotation image (JPG/JPEG/PNG)",
         },
       },
     },
@@ -161,14 +166,14 @@ export class MedicalRecordsController {
   async saveDoctorReview(
     @Param('id') id: string,
     @Body() dto: SaveDoctorReviewDto,
-    @UploadedFile() heatmapImageFile: Express.Multer.File | undefined,
+    @UploadedFile() doctorBrushFile: Express.Multer.File | undefined,
     @CurrentUser() user: User,
   ): Promise<ApiResponseType<MedicalRecordDto>> {
     const result = await this.medicalRecordsService.submitDoctorReview(
       id,
       dto,
       user,
-      heatmapImageFile,
+      doctorBrushFile,
     );
     return ResponseHelper.success(result, 'Review successfully saved');
   }
