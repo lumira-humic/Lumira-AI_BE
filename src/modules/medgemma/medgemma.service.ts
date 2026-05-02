@@ -40,6 +40,8 @@ type ProfilingMetrics = {
   tokens_per_second: number;
 };
 
+type UnknownRecord = Record<string, unknown>;
+
 /**
  * Service for MedGemma AI consultation.
  * Chat history is now persisted in PostgreSQL (medgemma_sessions / medgemma_messages)
@@ -63,7 +65,8 @@ export class MedGemmaService {
     role: MedGemmaRole,
     imageData?: string,
   ): Promise<MedGemmaResponseDto> {
-    const sessionId = randomUUID();
+    const requestedSessionId = this.toTrimmedOptionalString(dto.session_id);
+    const sessionId: string = requestedSessionId ?? randomUUID();
     const userPrompt = this.resolveUserPrompt(dto);
     await this.upsertSession(sessionId, role, null);
 
@@ -114,7 +117,7 @@ export class MedGemmaService {
 
   async getChatHistory(sessionId: string, role: MedGemmaRole): Promise<MedGemmaChatHistoryDto> {
     await this.assertSessionRole(sessionId, role);
-    const messages = await this.getRecentMessages(sessionId, HISTORY_WINDOW_SIZE);
+    const messages = await this.getAllMessages(sessionId);
 
     return {
       session_id: sessionId,
@@ -180,6 +183,13 @@ export class MedGemmaService {
     });
 
     return messages.reverse();
+  }
+
+  private async getAllMessages(sessionId: string): Promise<MedGemmaMessage[]> {
+    return this.messageRepo.find({
+      where: { session_id: sessionId },
+      order: { created_at: 'ASC' },
+    });
   }
 
   private toChatMessageDto(message: MedGemmaMessage): MedGemmaChatMessageDto {
@@ -258,7 +268,7 @@ export class MedGemmaService {
       );
     }
 
-    const data: unknown = await response.json();
+    const data = (await response.json()) as unknown;
     const latencySeconds = this.toPrecision((Date.now() - startedAt) / 1000, 2);
     const output = this.extractResponseText(data);
 
@@ -311,7 +321,10 @@ export class MedGemmaService {
   }
 
   private extractResponseText(payload: unknown): string {
-    const data = payload as Record<string, unknown>;
+    const data = this.asRecord(payload);
+    if (!data) {
+      return '';
+    }
 
     if (typeof data.response === 'string') {
       return data.response;
@@ -325,7 +338,7 @@ export class MedGemmaService {
       return data.output_text;
     }
 
-    const nestedData = data.data as Record<string, unknown> | undefined;
+    const nestedData = this.asRecord(data.data);
     if (nestedData && typeof nestedData.response === 'string') {
       return nestedData.response;
     }
@@ -334,8 +347,9 @@ export class MedGemmaService {
       return nestedData.consultation_result;
     }
 
-    const choices = data.choices as Array<Record<string, unknown>> | undefined;
-    const message = choices?.[0]?.message as Record<string, unknown> | undefined;
+    const choices = Array.isArray(data.choices) ? data.choices : undefined;
+    const firstChoice = this.asRecord(choices?.[0]);
+    const message = this.asRecord(firstChoice?.message);
     const content = message?.content;
 
     if (typeof content === 'string') {
@@ -345,8 +359,8 @@ export class MedGemmaService {
     if (Array.isArray(content)) {
       return content
         .map((item) => {
-          const part = item as Record<string, unknown>;
-          return typeof part.text === 'string' ? part.text : '';
+          const part = this.asRecord(item);
+          return typeof part?.text === 'string' ? part.text : '';
         })
         .join('')
         .trim();
@@ -360,11 +374,9 @@ export class MedGemmaService {
     output: string,
     measuredLatencySeconds: number,
   ): ProfilingMetrics {
-    const data = payload as Record<string, unknown>;
-    const nestedData = data.data as Record<string, unknown> | undefined;
-    const profiling =
-      (nestedData?.profiling as Record<string, unknown> | undefined) ??
-      (data.profiling as Record<string, unknown> | undefined);
+    const data = this.asRecord(payload);
+    const nestedData = this.asRecord(data?.data);
+    const profiling = this.asRecord(nestedData?.profiling) ?? this.asRecord(data?.profiling);
 
     const latencySeconds =
       this.toPositiveNumber(profiling?.latency_seconds) ?? measuredLatencySeconds;
@@ -383,8 +395,8 @@ export class MedGemmaService {
   }
 
   private extractGeneratedTokens(payload: unknown, output: string): number {
-    const data = payload as Record<string, unknown>;
-    const usage = data.usage as Record<string, unknown> | undefined;
+    const data = this.asRecord(payload);
+    const usage = this.asRecord(data?.usage);
 
     const usageOutputTokens = this.toNonNegativeInteger(usage?.output_tokens);
     if (usageOutputTokens !== null) return usageOutputTokens;
@@ -392,8 +404,8 @@ export class MedGemmaService {
     const usageCompletionTokens = this.toNonNegativeInteger(usage?.completion_tokens);
     if (usageCompletionTokens !== null) return usageCompletionTokens;
 
-    const nestedData = data.data as Record<string, unknown> | undefined;
-    const nestedUsage = nestedData?.usage as Record<string, unknown> | undefined;
+    const nestedData = this.asRecord(data?.data);
+    const nestedUsage = this.asRecord(nestedData?.usage);
 
     const nestedOutputTokens = this.toNonNegativeInteger(nestedUsage?.output_tokens);
     if (nestedOutputTokens !== null) return nestedOutputTokens;
@@ -463,13 +475,34 @@ export class MedGemmaService {
       return { message: 'Unknown transport error' };
     }
 
-    const errObj = error as Error & { cause?: unknown; code?: string };
-    const cause = errObj.cause as { code?: string; message?: string; name?: string } | undefined;
+    const errObj = error as Error & { cause?: unknown; code?: unknown };
+    const cause = this.asRecord(errObj.cause);
 
     return {
       message: errObj.message,
-      name: errObj.name ?? cause?.name,
-      code: errObj.code ?? cause?.code,
+      name: errObj.name || this.toOptionalString(cause?.name),
+      code: this.toOptionalString(errObj.code) ?? this.toOptionalString(cause?.code),
     };
+  }
+
+  private asRecord(value: unknown): UnknownRecord | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return undefined;
+    }
+
+    return value as UnknownRecord;
+  }
+
+  private toOptionalString(value: unknown): string | undefined {
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  private toTrimmedOptionalString(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
   }
 }

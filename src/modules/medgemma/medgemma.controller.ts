@@ -101,6 +101,11 @@ export class MedGemmaController {
           enum: ['doctor', 'patient'],
           description: 'Context role to adjust AI response depth',
         },
+        session_id: {
+          type: 'string',
+          description: 'Existing conversation session identifier. Omit to start a new chat.',
+          example: '90e73057-9959-4acd-a80e-26f1780f81f5',
+        },
         image: {
           type: 'string',
           format: 'binary',
@@ -205,9 +210,8 @@ export class MedGemmaController {
 
   @Get('sessions/:session_id/history')
   @ApiOperation({
-    summary: 'Get latest MedGemma chat history by session',
-    description:
-      'Returns latest 10 chat messages for a single MedGemma session. History is used as provider chat_history context on the next consultation.',
+    summary: 'Get MedGemma chat history by session',
+    description: 'Returns all persisted chat messages for a single MedGemma session.',
   })
   @ApiParam({
     name: 'session_id',
@@ -216,7 +220,7 @@ export class MedGemmaController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Latest 10 messages for the requested MedGemma session',
+    description: 'All persisted messages for the requested MedGemma session',
     schema: {
       type: 'object',
       properties: {
