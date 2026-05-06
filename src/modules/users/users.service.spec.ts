@@ -139,6 +139,23 @@ describe('UsersService', () => {
       expect(cacheManager.set).toHaveBeenCalled();
       expect(result[1]).toBe(1);
     });
+
+    it.each([10, 15, 20])('should return %s items for page 1', async (limit) => {
+      const users = Array.from({ length: limit }, (_, i) => ({
+        ...mockUser,
+        id: `uuid-${i + 1}`,
+        email: `user${i + 1}@lumira.ai`,
+      }));
+
+      cacheManager.get.mockResolvedValue(null);
+      repository.findAllWithFilter.mockResolvedValue([users, 25]);
+
+      const result = await service.findAll({ page: 1, limit });
+
+      expect(repository.findAllWithFilter).toHaveBeenCalledWith({ page: 1, limit });
+      expect(result[0]).toHaveLength(limit);
+      expect(result[1]).toBe(25);
+    });
   });
 
   describe('findById', () => {
