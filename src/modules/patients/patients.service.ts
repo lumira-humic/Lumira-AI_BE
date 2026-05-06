@@ -71,7 +71,7 @@ export class PatientsService {
     const search = query.search;
     const status = query.status;
 
-    const [patients] = await this.patientsRepository.findAll(page, limit, search);
+    const patients = await this.patientsRepository.findAllWithRecords(search);
 
     const mapped = patients.map((patient) => {
       const records = patient.medicalRecords ?? [];
@@ -106,8 +106,10 @@ export class PatientsService {
     });
 
     const filtered = mapped.filter((item) => item.finalRecords.length > 0);
+    const start = (page - 1) * limit;
+    const paged = filtered.slice(start, start + limit);
 
-    const data = filtered.map((item) =>
+    const data = paged.map((item) =>
       PatientListResponseDto.fromEntity(
         item.patient,
         item.latestRecord?.originalImagePath ?? null,
@@ -117,7 +119,7 @@ export class PatientsService {
 
     return {
       data,
-      total: data.length,
+      total: filtered.length,
       page,
       limit,
     };

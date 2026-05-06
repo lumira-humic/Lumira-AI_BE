@@ -99,6 +99,29 @@ export class PatientsRepository extends Repository<Patient> {
   }
 
   /**
+   * Retrieve all patients with medical records for in-memory filtering.
+   *
+   * Used when status filtering depends on derived record state.
+   */
+  async findAllWithRecords(search?: string): Promise<Patient[]> {
+    const queryBuilder = this.repository
+      .createQueryBuilder('patient')
+      .leftJoinAndSelect('patient.medicalRecords', 'record')
+      .leftJoinAndSelect('record.validator', 'doctor')
+      .distinct(true);
+
+    if (search) {
+      queryBuilder.andWhere('(patient.name ILIKE :search OR patient.email ILIKE :search)', {
+        search: `%${search}%`,
+      });
+    }
+
+    queryBuilder.orderBy('patient.createdAt', 'DESC');
+
+    return queryBuilder.getMany();
+  }
+
+  /**
    * Create and persist a new patient record.
    *
    * @param data - Partial patient data to persist.
