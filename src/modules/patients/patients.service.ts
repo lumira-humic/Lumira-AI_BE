@@ -12,6 +12,7 @@ import {
   QueryPatientDto,
 } from './dto';
 import { PatientsRepository } from './patients.repository';
+import { Patient } from './entities/patient.entity';
 import { MedicalRecord } from '../medical-records';
 import { MedicalRecordsService } from '../medical-records/medical-records.service';
 import { AppException, ErrorCode } from '../../common';
@@ -70,42 +71,52 @@ export class PatientsService {
     const limit = query.limit ?? 10;
     const search = query.search;
     const status = query.status;
+    const hasFilter = Boolean(status);
 
     const patients = await this.patientsRepository.findAllWithRecords(search);
 
-    const mapped = patients.map((patient) => {
+    type PatientListItem = {
+      patient: Patient;
+      finalRecords: MedicalRecord[];
+      latestRecord?: MedicalRecord;
+    };
+
+    const mapped: Array<PatientListItem | null> = patients.map((patient) => {
       const records = patient.medicalRecords ?? [];
 
-      let finalRecords = this.getFinalMedicalRecords(records);
+      const finalRecords = this.getFinalMedicalRecords(records);
+      let filteredRecords = finalRecords;
 
       if (status === 'completed') {
-        finalRecords = finalRecords.filter((r) => r.validationStatus === 'REVIEWED');
+        filteredRecords = finalRecords.filter((r) => r.validationStatus === 'REVIEWED');
       }
 
       if (status === 'waitingForReview') {
-        finalRecords = finalRecords.filter(
-          (r) => r.validationStatus === 'PENDING' && r.aiDiagnosis?.toLowerCase() !== 'malignant',
-        );
+        filteredRecords = finalRecords.filter((r) => r.validationStatus === 'PENDING');
       }
 
       if (status === 'needAttention') {
-        finalRecords = finalRecords.filter(
+        filteredRecords = finalRecords.filter(
           (r) => r.validationStatus === 'PENDING' && r.aiDiagnosis?.toLowerCase() === 'malignant',
         );
       }
 
-      const latestRecord = finalRecords.sort(
+      if (hasFilter && filteredRecords.length === 0) {
+        return null;
+      }
+
+      const latestRecord = filteredRecords.sort(
         (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
       )[0];
 
       return {
         patient,
-        finalRecords,
+        finalRecords: filteredRecords,
         latestRecord,
       };
     });
 
-    const filtered = mapped.filter((item) => item.finalRecords.length > 0);
+    const filtered = mapped.filter((item): item is PatientListItem => item !== null);
     const start = (page - 1) * limit;
     const paged = filtered.slice(start, start + limit);
 
