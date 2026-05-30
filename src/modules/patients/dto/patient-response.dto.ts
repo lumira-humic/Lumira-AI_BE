@@ -19,9 +19,6 @@ export class PatientResponseDto {
   @ApiProperty({ example: '+6281234567890', nullable: true })
   phone!: string | null;
 
-  @ApiProperty({ example: 'Jl. Merdeka No. 10, Jakarta', nullable: true })
-  address!: string | null;
-
   @ApiProperty()
   createdAt!: Date;
 

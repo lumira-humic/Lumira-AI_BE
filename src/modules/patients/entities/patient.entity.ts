@@ -35,10 +35,6 @@ export class Patient extends BaseEntity {
   @Column({ type: 'varchar', nullable: true })
   phone!: string | null;
 
-  /** Residential address. */
-  @Column({ type: 'varchar', nullable: true })
-  address!: string | null;
-
   // ──────────────────────────── Relations ────────────────────────────
 
   /** Medical records belonging to this patient. */

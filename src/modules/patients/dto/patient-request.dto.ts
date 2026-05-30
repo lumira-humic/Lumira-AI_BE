@@ -40,14 +40,6 @@ export class PatientRequestDto {
   @IsString()
   phone?: string;
 
-  @ApiPropertyOptional({
-    example: 'Jl. Merdeka No. 10, Jakarta',
-    description: 'Residential address',
-  })
-  @IsOptional()
-  @IsString()
-  address?: string;
-
   @IsOptional()
   @IsString()
   medicalRecordImage?: string;
