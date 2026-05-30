@@ -223,6 +223,7 @@ export class MedGemmaService {
         503,
       );
     }
+    const providerUrls = this.buildProviderCandidateUrls(baseUrl);
 
     const historyMessages: ProviderMessage[] = history.map((m) => ({
       role: m.sender === 'assistant' ? 'model' : 'user',
@@ -247,25 +248,62 @@ export class MedGemmaService {
     }
 
     const startedAt = Date.now();
-    let response: Response;
-    try {
-      response = await fetch(baseUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (error) {
-      this.rethrowProviderTransportError(error, baseUrl, timeoutMs);
-    }
+    let response: Response | null = null;
+    let lastTransportError: unknown;
+    let lastHttpErrorStatus: number | null = null;
+    let lastHttpErrorBody = '';
+    let lastUrlTried = providerUrls[0];
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    for (let index = 0; index < providerUrls.length; index += 1) {
+      const url = providerUrls[index];
+      lastUrlTried = url;
+
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch (error) {
+        lastTransportError = error;
+        continue;
+      }
+
+      if (response.ok) {
+        break;
+      }
+
+      lastHttpErrorStatus = response.status;
+      lastHttpErrorBody = await response.text();
+      response = null;
+
+      const shouldTryNextCandidate = lastHttpErrorStatus === 404 && index < providerUrls.length - 1;
+      if (shouldTryNextCandidate) {
+        continue;
+      }
+
       throw new AppException(
         ErrorCode.INTERNAL_SERVER_ERROR,
-        `MedGemma provider request failed (${response.status}): ${errorText || 'No details'}`,
+        `MedGemma provider request failed (${lastHttpErrorStatus}) at ${url}: ${
+          lastHttpErrorBody || 'No details'
+        }`,
         502,
       );
+    }
+
+    if (!response) {
+      if (lastHttpErrorStatus !== null) {
+        throw new AppException(
+          ErrorCode.INTERNAL_SERVER_ERROR,
+          `MedGemma provider request failed (${lastHttpErrorStatus}) at ${lastUrlTried}: ${
+            lastHttpErrorBody || 'No details'
+          }`,
+          502,
+        );
+      }
+
+      this.rethrowProviderTransportError(lastTransportError, lastUrlTried, timeoutMs);
     }
 
     const data = (await response.json()) as unknown;
@@ -300,6 +338,35 @@ export class MedGemmaService {
 
   private resolveSessionTitle(_aiResponse: string): string {
     return 'untitled';
+  }
+
+  private buildProviderCandidateUrls(baseUrl: string): string[] {
+    const normalized = baseUrl.trim().replace(/\/+$/, '');
+    const root = this.extractProviderUrlRoot(normalized);
+    if (!root) {
+      return [normalized];
+    }
+
+    const existingPath = normalized.slice(root.length);
+    const hasExplicitPath = existingPath.length > 0 && existingPath !== '/';
+    const defaultPaths = ['/consultations', '/consultation', '/v1/chat/completions'];
+
+    if (hasExplicitPath) {
+      const currentPath = existingPath.startsWith('/') ? existingPath : `/${existingPath}`;
+      const mergedPaths = [currentPath, ...defaultPaths.filter((p) => p !== currentPath)];
+      return mergedPaths.map((path) => `${root}${path}`);
+    }
+
+    return defaultPaths.map((path) => `${root}${path}`);
+  }
+
+  private extractProviderUrlRoot(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch {
+      return null;
+    }
   }
 
   private toProviderUser(role: MedGemmaRole): 'Doctor' | 'Patient' {

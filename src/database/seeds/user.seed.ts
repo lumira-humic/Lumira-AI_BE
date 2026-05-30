@@ -100,7 +100,6 @@ export async function seedUsers(dataSource: DataSource): Promise<void> {
           email: patientEmail,
           password: hashed,
           phone: null,
-          address: null,
         });
         await patientRepository.save(patient);
         console.log(`[Seed] Patient created → ${patientEmail}  (id: ${patient.id})`);

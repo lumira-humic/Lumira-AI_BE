@@ -158,7 +158,12 @@ export class AuthService {
       }
 
       user.password = await this.hashPassword(dto.newPassword);
-      await this.usersRepository.save(user);
+      await this.usersRepository
+        .createQueryBuilder()
+        .update(User)
+        .set({ password: user.password })
+        .where('id = :id', { id: userId })
+        .execute();
     } else {
       const patient = await this.patientsRepository
         .createQueryBuilder('patient')
@@ -180,7 +185,12 @@ export class AuthService {
       }
 
       patient.password = await this.hashPassword(dto.newPassword);
-      await this.patientsRepository.save(patient);
+      await this.patientsRepository
+        .createQueryBuilder()
+        .update(Patient)
+        .set({ password: patient.password })
+        .where('id = :id', { id: userId })
+        .execute();
     }
 
     this.logger.log(`Password changed for ${actorType}:${userId}`);
@@ -370,7 +380,6 @@ export class AuthService {
     dto.name = patient.name;
     dto.email = patient.email;
     dto.phone = patient.phone;
-    dto.address = patient.address;
     dto.createdAt = patient.createdAt;
     dto.updatedAt = patient.updatedAt;
     return dto;

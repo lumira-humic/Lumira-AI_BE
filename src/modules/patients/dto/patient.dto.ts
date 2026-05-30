@@ -28,19 +28,12 @@ export class PatientDto {
   })
   phone!: string | null;
 
-  @ApiProperty({
-    example: 'Jl. Merdeka No. 10, Jakarta',
-    nullable: true,
-  })
-  address!: string | null;
-
   static fromEntity(patient: Patient): PatientDto {
     const dto = new PatientDto();
     dto.id = patient.id;
     dto.name = patient.name;
     dto.email = patient.email;
     dto.phone = patient.phone;
-    dto.address = patient.address;
     return dto;
   }
 
