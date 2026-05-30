@@ -34,13 +34,6 @@ export class PatientListResponseDto {
   phone!: string | null;
 
   @ApiPropertyOptional({
-    example: 'Jl. Merdeka No. 10, Jakarta',
-    description: 'Patient address',
-    nullable: true,
-  })
-  address!: string | null;
-
-  @ApiPropertyOptional({
     example: 'https://api.lumira.ai/uploads/scan_123.png',
     description: 'Public URL of the latest scan image',
     nullable: true,
@@ -70,7 +63,6 @@ export class PatientListResponseDto {
     dto.name = patient.name;
     dto.email = patient.email;
     dto.phone = patient.phone;
-    dto.address = patient.address;
     dto.image = image || null;
     const medicalRecords = records ?? [];
     if (medicalRecords.length === 0) {

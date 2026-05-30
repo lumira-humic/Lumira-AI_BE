@@ -162,7 +162,6 @@ export class PatientsService {
       email: dto.email,
       password: hashedPassword, // Temporary
       phone: dto.phone ?? null,
-      address: dto.address ?? null,
     });
     if (medicalRecordImage) {
       await this.medicalRecordsService.uploadAndAnalyze(patient.id, medicalRecordImage, actorId);
@@ -240,7 +239,18 @@ export class PatientsService {
     patient.name = dto.name;
     patient.email = dto.email;
     patient.phone = dto.phone ?? null;
-    patient.address = dto.address ?? null;
+
+    // If password is provided, hash and update it
+    if (dto.password) {
+      const hashedPassword = await bcrypt.hash(dto.password, 12);
+      await this.patientsRepository
+        .createQueryBuilder()
+        .update(Patient)
+        .set({ password: hashedPassword })
+        .where('id = :id', { id })
+        .execute();
+    }
+
     const updated = await this.patientsRepository.save(patient);
 
     // Log activity

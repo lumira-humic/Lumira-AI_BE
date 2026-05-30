@@ -136,7 +136,6 @@ describe('AuthService', () => {
         email: 'patient@mail.com',
         name: 'Patient Test',
         phone: null,
-        address: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       } as never;
@@ -177,7 +176,6 @@ describe('AuthService', () => {
         name: 'Patient Test',
         email: 'patient@mail.com',
         phone: '+628123',
-        address: 'Jakarta',
         createdAt: new Date(),
         updatedAt: new Date(),
       } as never);

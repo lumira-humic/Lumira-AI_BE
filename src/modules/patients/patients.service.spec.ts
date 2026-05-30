@@ -31,7 +31,6 @@ const makePatient = (index: number): Patient =>
     name: `Patient ${index}`,
     email: `patient${index}@mail.com`,
     phone: null,
-    address: null,
     medicalRecords: [makeRecord(`REC-${index}`, `PAS-${index}`)],
   } as Patient);
 

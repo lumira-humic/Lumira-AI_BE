@@ -116,7 +116,6 @@ export class PatientsController {
         email: { type: 'string', example: 'budi@mail.com' },
         password: { type: 'string', example: 'S3cur3P@ss' },
         phone: { type: 'string', example: '+6281234567890' },
-        address: { type: 'string', example: 'Jl. Merdeka No. 10, Jakarta' },
         medicalRecordImage: {
           type: 'string',
           format: 'binary',
