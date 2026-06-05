@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
 import { User } from '../../modules/users/entities/user.entity';
@@ -7,111 +7,150 @@ import { UserStatus } from '../../modules/users/enums/user-status.enum';
 import { Patient } from '../../modules/patients/entities/patient.entity';
 import { generatePrefixedId } from '../../common/utils/id-generator.util';
 
-/**
- * Seeds admin, doctor and patient records from environment variables.
- *
- * IDs are generated with human-readable prefixes:
- *   - Admin  → `ADM-XXXXXX`
- *   - Doctor → `DOC-XXXXXX`
- *   - Patient → `PAS-XXXXXX`
- *
- * Environment variables (all three required per role):
- *   Admin  : SEED_ADMIN_NAME,   SEED_ADMIN_EMAIL,   SEED_ADMIN_PASSWORD
- *   Doctor : SEED_DOCTOR_NAME,  SEED_DOCTOR_EMAIL,  SEED_DOCTOR_PASSWORD
- *   Patient: SEED_PATIENT_NAME, SEED_PATIENT_EMAIL, SEED_PATIENT_PASSWORD
- */
+const BCRYPT_ROUNDS = 10;
+const DEFAULT_SEED_PASSWORD = process.env.SEED_DEFAULT_PASSWORD ?? 'Lumira@2026';
+
+const userSeeds: Array<{
+  idPrefix: 'ADM' | 'DOC';
+  name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+}> = [
+  {
+    idPrefix: 'ADM',
+    name: 'Admin Lumira',
+    email: 'admin@lumira.ai',
+    role: UserRole.ADMIN,
+    status: UserStatus.ACTIVE,
+  },
+  {
+    idPrefix: 'DOC',
+    name: 'dr. Andini Prameswari',
+    email: 'andini.prameswari@lumira.ai',
+    role: UserRole.DOCTOR,
+    status: UserStatus.ACTIVE,
+  },
+  {
+    idPrefix: 'DOC',
+    name: 'dr. Bima Prakasa',
+    email: 'bima.prakasa@lumira.ai',
+    role: UserRole.DOCTOR,
+    status: UserStatus.ACTIVE,
+  },
+  {
+    idPrefix: 'DOC',
+    name: 'dr. Citra Kusumawardani',
+    email: 'citra.kusumawardani@lumira.ai',
+    role: UserRole.DOCTOR,
+    status: UserStatus.ACTIVE,
+  },
+  {
+    idPrefix: 'DOC',
+    name: 'dr. Dimas Suryanto',
+    email: 'dimas.suryanto@lumira.ai',
+    role: UserRole.DOCTOR,
+    status: UserStatus.ACTIVE,
+  },
+  {
+    idPrefix: 'DOC',
+    name: 'dr. Farah Nabila',
+    email: 'farah.nabila@lumira.ai',
+    role: UserRole.DOCTOR,
+    status: UserStatus.ACTIVE,
+  },
+];
+
+const patientSeeds: Array<{
+  name: string;
+  email: string;
+  phone: string;
+}> = [
+  {
+    name: 'Ayu Lestari',
+    email: 'ayu.lestari@lumira.ai',
+    phone: '+6281218457731',
+  },
+  {
+    name: 'Bagus Santoso',
+    email: 'bagus.santoso@lumira.ai',
+    phone: '+6281386249105',
+  },
+  {
+    name: 'Clara Widjaja',
+    email: 'clara.widjaja@lumira.ai',
+    phone: '+6281570392864',
+  },
+  {
+    name: 'Dewi Kartika',
+    email: 'dewi.kartika@lumira.ai',
+    phone: '+6281695084127',
+  },
+  {
+    name: 'Eko Prasetyo',
+    email: 'eko.prasetyo@lumira.ai',
+    phone: '+6281774236589',
+  },
+];
+
+async function upsertUser(
+  userRepository: Repository<User>,
+  seed: (typeof userSeeds)[number],
+  password: string,
+): Promise<User> {
+  const existing = await userRepository.findOne({
+    where: { email: seed.email },
+    withDeleted: true,
+  });
+  const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+  const user = userRepository.create({
+    id: existing?.id ?? generatePrefixedId(seed.idPrefix),
+    name: seed.name,
+    email: seed.email,
+    password: hashedPassword,
+    role: seed.role,
+    status: seed.status,
+    deletedAt: null,
+  });
+
+  return userRepository.save(user);
+}
+
+async function upsertPatient(
+  patientRepository: Repository<Patient>,
+  seed: (typeof patientSeeds)[number],
+  password: string,
+): Promise<Patient> {
+  const existing = await patientRepository.findOne({
+    where: { email: seed.email },
+    withDeleted: true,
+  });
+  const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+  const patient = patientRepository.create({
+    id: existing?.id ?? generatePrefixedId('PAS'),
+    name: seed.name,
+    email: seed.email,
+    password: hashedPassword,
+    phone: seed.phone,
+    deletedAt: null,
+  });
+
+  return patientRepository.save(patient);
+}
+
 export async function seedUsers(dataSource: DataSource): Promise<void> {
   const userRepository = dataSource.getRepository(User);
   const patientRepository = dataSource.getRepository(Patient);
 
-  // ── Admin ──────────────────────────────────────────────────────────────────
-  try {
-    const adminName = process.env.SEED_ADMIN_NAME;
-    const adminEmail = process.env.SEED_ADMIN_EMAIL;
-    const adminPassword = process.env.SEED_ADMIN_PASSWORD;
-
-    if (adminName && adminEmail && adminPassword) {
-      const adminExists = await userRepository.findOne({ where: { email: adminEmail } });
-      if (!adminExists) {
-        const hashed = await bcrypt.hash(adminPassword, 10);
-        const admin = userRepository.create({
-          id: generatePrefixedId('ADM'),
-          name: adminName,
-          email: adminEmail,
-          password: hashed,
-          role: UserRole.ADMIN,
-          status: UserStatus.ACTIVE,
-        });
-        await userRepository.save(admin);
-        console.log(`[Seed] Admin created → ${adminEmail}  (id: ${admin.id})`);
-      } else {
-        console.log(`[Seed] Admin already exists → skip  (${adminEmail}, id: ${adminExists.id})`);
-      }
-    } else {
-      console.log('[Seed] Admin env vars not fully defined → skipping admin seed');
-    }
-  } catch (err) {
-    console.error('[Seed] Error seeding admin:', err);
+  for (const seed of userSeeds) {
+    const user = await upsertUser(userRepository, seed, DEFAULT_SEED_PASSWORD);
+    console.log(`[Seed] User ready: ${user.email} (${user.role}, id: ${user.id})`);
   }
 
-  // ── Doctor ─────────────────────────────────────────────────────────────────
-  try {
-    const doctorName = process.env.SEED_DOCTOR_NAME;
-    const doctorEmail = process.env.SEED_DOCTOR_EMAIL;
-    const doctorPassword = process.env.SEED_DOCTOR_PASSWORD;
-
-    if (doctorName && doctorEmail && doctorPassword) {
-      const docExists = await userRepository.findOne({ where: { email: doctorEmail } });
-      if (!docExists) {
-        const hashed = await bcrypt.hash(doctorPassword, 10);
-        const doctor = userRepository.create({
-          id: generatePrefixedId('DOC'),
-          name: doctorName,
-          email: doctorEmail,
-          password: hashed,
-          role: UserRole.DOCTOR,
-          status: UserStatus.ACTIVE,
-        });
-        await userRepository.save(doctor);
-        console.log(`[Seed] Doctor created → ${doctorEmail}  (id: ${doctor.id})`);
-      } else {
-        console.log(`[Seed] Doctor already exists → skip  (${doctorEmail}, id: ${docExists.id})`);
-      }
-    } else {
-      console.log('[Seed] Doctor env vars not fully defined → skipping doctor seed');
-    }
-  } catch (err) {
-    console.error('[Seed] Error seeding doctor:', err);
-  }
-
-  // ── Patient ────────────────────────────────────────────────────────────────
-  try {
-    const patientName = process.env.SEED_PATIENT_NAME;
-    const patientEmail = process.env.SEED_PATIENT_EMAIL;
-    const patientPassword = process.env.SEED_PATIENT_PASSWORD;
-
-    if (patientName && patientEmail && patientPassword) {
-      const patientExists = await patientRepository.findOne({ where: { email: patientEmail } });
-      if (!patientExists) {
-        const hashed = await bcrypt.hash(patientPassword, 10);
-        const patient = patientRepository.create({
-          id: generatePrefixedId('PAS'),
-          name: patientName,
-          email: patientEmail,
-          password: hashed,
-          phone: null,
-        });
-        await patientRepository.save(patient);
-        console.log(`[Seed] Patient created → ${patientEmail}  (id: ${patient.id})`);
-      } else {
-        console.log(
-          `[Seed] Patient already exists → skip  (${patientEmail}, id: ${patientExists.id})`,
-        );
-      }
-    } else {
-      console.log('[Seed] Patient env vars not fully defined → skipping patient seed');
-    }
-  } catch (err) {
-    console.error('[Seed] Error seeding patient:', err);
+  for (const seed of patientSeeds) {
+    const patient = await upsertPatient(patientRepository, seed, DEFAULT_SEED_PASSWORD);
+    console.log(`[Seed] Patient ready: ${patient.email} (id: ${patient.id})`);
   }
 }
